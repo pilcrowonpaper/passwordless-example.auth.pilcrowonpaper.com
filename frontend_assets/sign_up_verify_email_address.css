@@ -1,0 +1,7 @@
+#controls {
+	display: flex;
+	place-items: center;
+	gap: 1rem;
+	flex-wrap: wrap;
+	margin-top: 1.5rem;
+}

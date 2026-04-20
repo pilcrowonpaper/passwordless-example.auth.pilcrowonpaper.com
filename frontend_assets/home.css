@@ -1,0 +1,7 @@
+#auth {
+	margin-top: 1.5rem;
+	display: flex;
+	place-items: center;
+	gap: 1rem;
+	flex-wrap: wrap;
+}

@@ -1,0 +1,154 @@
+html {
+	--button-color: #000000;
+	--disabled-background-color: #e5e5e5;
+	--input-border-color: #999999;
+	--input-background-color: #f8f8f8;
+	--disabled-color: #999999;
+	--link-color: #2469eb;
+
+	padding: 0 1rem;
+}
+
+body {
+	max-width: 50rem;
+	min-height: 100%;
+	display: grid;
+	grid-template-rows: auto 1fr auto;
+	width: 100%;
+	margin: auto;
+}
+
+header {
+	padding: 1.5rem 0;
+	width: 100%;
+}
+
+#home-link {
+	font-weight: bold;
+	color: #000000;
+	font-size: 0.85rem;
+}
+
+main {
+	padding-top: 1rem;
+	width: 100%;
+}
+
+footer {
+	width: 100%;
+	padding: 2rem 0;
+	font-size: 0.8rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+h1 {
+	font-size: 2rem;
+	font-weight: bold;
+	margin-bottom: 2rem;
+}
+
+form label {
+	display: block;
+	margin-bottom: 0.5rem;
+	font-size: 0.8rem;
+	font-weight: bold;
+}
+
+form input {
+	padding: 0.5rem;
+	border: solid 1px var(--input-border-color);
+	border-radius: 5px;
+	max-width: 30rem;
+	width: 100%;
+	background-color: var(--input-background-color);
+	margin-bottom: 1rem;
+}
+
+h1 + p + form {
+	margin-top: 1rem;
+}
+
+p > a {
+	color: var(--link-color);
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.block-button {
+	padding: 0.5rem 1rem;
+	color: white;
+	background-color: var(--button-color);
+	border-radius: 5px;
+	cursor: pointer;
+	display: block;
+}
+
+.block-button:disabled {
+	color: var(--disabled-color);
+	background-color: var(--disabled-background-color);
+	cursor: default;
+}
+
+.link-button {
+	display: block;;
+	color: var(--link-color);
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.link-button:disabled {
+	color: var(--disabled-color);
+	cursor: default;
+}
+
+form button {
+	padding: 0.5rem 1rem;
+	color: white;
+	background-color: var(--button-color);
+	border-radius: 5px;
+	cursor: pointer;
+	display: block;
+}
+
+form button:disabled {
+	color: var(--disabled-color);
+	background-color: var(--disabled-background-color);
+	cursor: default;
+}
+
+/* reset */
+
+* {
+	margin: 0;
+	padding: 0;
+	font-size: inherit;
+	font-weight: normal;
+	color: inherit;
+	background: none;
+	border: none;
+	background-color: transparent;
+	appearance: none;
+	box-sizing: border-box;
+	text-decoration: none;
+}
+
+html {
+	font-family: system-ui;
+	font-size: 1rem;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+	display: block;
+	max-width: 100%;
+}
+
+ul,
+ol {
+	list-style: none;
+}

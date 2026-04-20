@@ -1,0 +1,2260 @@
+package main
+
+// TODO: Store webauthn challenge in memory?
+
+import (
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"errors"
+	"fmt"
+
+	"passwordless-example.auth.pilcrowonpaper.com/webauthn"
+)
+
+const (
+	actionStartSignup                              = "start_signup"
+	actionCancelSignup                             = "cancel_signup"
+	actionSendSignupEmailAddressVerificationCode   = "send_signup_email_address_verification_code"
+	actionVerifySignupEmailAddressVerificationCode = "verify_signup_email_address_verification_code"
+	actionCompleteSignup                           = "complete_signup"
+
+	actionStartSignupPasskeyRegistration          = "start_signup_passkey_registration"
+	actionDeleteCancelPasskeyRegistration         = "cancel_signup_passkey_registration"
+	actionSetSignupPasskeyRegistrationPasskeyName = "set_signup_passkey_registration_passkey_name"
+
+	actionStartEmailCodeSignin           = "start_email_code_signin"
+	actionCancelEmailCodeSignin          = "cancel_email_code_signin"
+	actionVerifyEmailCodeSigninEmailCode = "verify_email_code_signin_email_code"
+
+	actionStartPasskeySignin                   = "start_passkey_signin"
+	actionCancelPasskeySignin                  = "cancel_passkey_signin"
+	actionVerifyPasskeySigninWebauthnSignature = "verify_passkey_signin_webauthn_signature"
+
+	actionSignOut           = "sign_out"
+	actionSignOutAllDevices = "sign_out_all_devices"
+
+	actionCancelIdentityVerification                         = "cancel_identity_verification"
+	actionVerifyIdentityVerificationPasskeyWebauthnSignature = "verify_identity_verification_passkey_webauthn_signature"
+	actionIssueIdentityVerificationEmailCode                 = "issue_identity_verification_email_code"
+	actionRevokeIdentityVerificationEmailCode                = "revoke_identity_verification_email_code"
+	actionVerifyIdentityVerificationEmailCode                = "verify_identity_verification_email_code"
+
+	actionStartEmailAddressUpdate                                 = "start_email_address_update"
+	actionCancelEmailAddressUpdate                                = "cancel_email_address_update"
+	actionSetEmailAddressUpdateNewEmailAddress                    = "set_email_address_update_new_email_address"
+	actionSendEmailAddressUpdateNewEmailAddressVerificationCode   = "send_email_address_update_new_email_address_verification_code"
+	actionVerifyEmailAddressUpdateNewEmailAddressVerificationCode = "verify_email_address_update_new_email_address_verification_code"
+
+	actionStartPasskeyRegistration                        = "start_passkey_registration"
+	actionCancelPasskeyRegistration                       = "cancel_passkey_registration"
+	actionSetPasskeyRegistrationPasskeyWebauthnCredential = "set_passkey_registration_passkey_webauthn_credential"
+	actionSetPasskeyRegistrationPasskeyName               = "set_passkey_registration_passkey_name"
+
+	actionStartPasskeyDeletion   = "start_passkey_deletion"
+	actionCancelPasskeyDeletion  = "cancel_passkey_deletion"
+	actionConfirmPasskeyDeletion = "confirm_passkey_deletion"
+
+	actionStartAccountDeletion   = "start_account_deletion"
+	actionCancelAccountDeletion  = "cancel_account_deletion"
+	actionConfirmAccountDeletion = "confirm_account_deletion"
+)
+
+func (server *serverStruct) startSignupAction(requestId string, emailAddress string) (string, string) {
+	const (
+		errorCodeInvalidEmailAddress     = "invalid_email_address"
+		errorCodeEmailAddressAlreadyUsed = "email_address_already_used"
+		errorCodeRateLimited             = "rate_limited"
+		errorCodeUnexpectedError         = "unexpected_error"
+	)
+
+	emailAddressValid := verifyAccountIdentifierEmailAddressPattern(emailAddress)
+	if !emailAddressValid {
+		return "", errorCodeInvalidEmailAddress
+	}
+
+	emailAddressAvailable, err := server.checkUserEmailAddressAvailability(emailAddress)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to check user email address availability: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+	if !emailAddressAvailable {
+		return "", errorCodeEmailAddressAlreadyUsed
+	}
+
+	rateLimitAllowed := server.emailRateLimit.Consume(emailAddress)
+	if !rateLimitAllowed {
+		return "", errorCodeRateLimited
+	}
+
+	signup, signupSecret, err := server.createSignup(emailAddress)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to create signup: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	server.logSignupStartedRequestEvent(requestId, signup.id, signup.emailAddress)
+
+	err = server.sendSignupEmailAddressVerificationCodeEmail(signup.emailAddress, signup.emailAddressVerificationCode)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to send signup email address verification code email: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	server.logRequestEmail(requestId, signup.emailAddress, emailTypeSignupEmailAddressVerificationCode)
+
+	signupToken := createSessionToken(signup.id, signupSecret)
+
+	return signupToken, ""
+}
+
+func (server *serverStruct) cancelSignupAction(requestId string, signupToken string) string {
+	const (
+		errorCodeInvalidSignupToken = "invalid_signup_token"
+		errorCodeConflict           = "conflict"
+		errorCodeUnexpectedError    = "unexpected_error"
+	)
+
+	signup, err := server.validateSignupToken(signupToken)
+	if errors.Is(err, errInvalidSignupToken) {
+		return errorCodeInvalidSignupToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	err = server.deleteSignup(signup.id)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to delete signup: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	return ""
+}
+
+func (server *serverStruct) sendSignupEmailAddressVerificationCodeAction(requestId string, signupToken string) string {
+	const (
+		errorCodeInvalidSignupToken          = "invalid_signup_token"
+		errorCodeEmailAddressAlreadyVerified = "email_address_already_verified"
+		errorCodeRateLimited                 = "rate_limited"
+		errorCodeUnexpectedError             = "unexpected_error"
+	)
+
+	signup, err := server.validateSignupToken(signupToken)
+	if errors.Is(err, errInvalidSignupToken) {
+		return errorCodeInvalidSignupToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	if signup.emailAddressVerified {
+		return errorCodeEmailAddressAlreadyVerified
+	}
+
+	rateLimitAllowed := server.emailRateLimit.Consume(signup.emailAddress)
+	if !rateLimitAllowed {
+		return errorCodeRateLimited
+	}
+
+	err = server.sendSignupEmailAddressVerificationCodeEmail(signup.emailAddress, signup.emailAddressVerificationCode)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to send signup email address verification code email: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	server.logRequestEmail(requestId, signup.emailAddress, emailTypeSignupEmailAddressVerificationCode)
+
+	return ""
+}
+
+func (server *serverStruct) verifySignupEmailAddressVerificationCodeAction(requestId string, signupToken string, verificationCode string) string {
+	const (
+		errorCodeInvalidSignupToken          = "invalid_signup_token"
+		errorCodeEmailAddressAlreadyVerified = "email_address_already_verified"
+		errorCodeIncorrectVerificationCode   = "incorrect_verification_code"
+		errorCodeRateLimited                 = "rate_limited"
+		errorCodeUnexpectedError             = "unexpected_error"
+	)
+
+	signup, err := server.validateSignupToken(signupToken)
+	if errors.Is(err, errInvalidSignupToken) {
+		return errorCodeInvalidSignupToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	if signup.emailAddressVerified {
+		return errorCodeEmailAddressAlreadyVerified
+	}
+
+	rateLimitAllowed := server.emailAddressVerificationRateLimit.Consume(signup.emailAddress)
+	if !rateLimitAllowed {
+		return errorCodeRateLimited
+	}
+
+	emailAddressVerificationCodeValid := signup.compareEmailAddressVerificationCode(verificationCode)
+	if !emailAddressVerificationCodeValid {
+		server.logSignupEmailAddressVerificationFailedRequestEvent(requestId, signup.id, signup.emailAddress)
+		return errorCodeIncorrectVerificationCode
+	}
+
+	err = server.setSignupAsEmailAddressVerified(signup.id)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to set signup as email address verified: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	server.logSignupEmailAddressVerifiedRequestEvent(requestId, signup.id, signup.emailAddress)
+
+	return ""
+}
+
+func (server *serverStruct) completeSignupAction(requestId string, signupToken string) (string, string) {
+	const (
+		errorCodeInvalidSignupToken      = "invalid_signup_token"
+		errorCodeEmailAddressNotVerified = "email_address_not_verified"
+		errorCodeEmailAddressAlreadyUsed = "email_address_already_used"
+		errorCodeUnexpectedError         = "unexpected_error"
+	)
+
+	signup, err := server.validateSignupToken(signupToken)
+	if errors.Is(err, errInvalidSignupToken) {
+		return "", errorCodeInvalidSignupToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	if !signup.emailAddressVerified {
+		return "", errorCodeEmailAddressNotVerified
+	}
+
+	emailAddressAvailable, err := server.checkUserEmailAddressAvailability(signup.emailAddress)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to check user email address availability: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+	if !emailAddressAvailable {
+		return "", errorCodeEmailAddressAlreadyUsed
+	}
+
+	user, session, sessionSecret, err := server.completeSignup(signup.id)
+	if errors.Is(err, errItemNotFound) || errors.Is(err, errItemConflict) {
+		return "", errorCodeInvalidSignupToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to complete signup: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	server.logSignupCompletedRequestEvent(requestId, signup.id, signup.emailAddress, user.id, session.id)
+
+	sessionToken := createSessionToken(session.id, sessionSecret)
+
+	return sessionToken, ""
+}
+
+func (server *serverStruct) startSignupPasskeyRegistrationAction(requestId string, signupToken string, webauthnCredentialId []byte, signatureAlgorithm string, publicKey []byte, webauthnAuthenticatorId []byte) (string, string) {
+	const (
+		errorCodeInvalidSignupToken              = "invalid_signup_token"
+		errorCodeEmailAddressNotVerified         = "email_address_not_verified"
+		errorCodeInvalidSignatureAlgorithm       = "invalid_signature_algorithm"
+		errorCodeInvalidPublicKey                = "invalid_public_key"
+		errorCodeInvalidWebauthnCredentialId     = "invalid_webauthn_credential_id"
+		errorCodeWebauthnCredentialIdAlreadyUsed = "webauthn_credential_id_already_used"
+		errorCodeInvalidWebauthnAuthenticatorId  = "invalid_webauthn_authenticator_id"
+		errorCodeConflict                        = "conflict"
+		errorCodeUnexpectedError                 = "unexpected_error"
+	)
+
+	signup, err := server.validateSignupToken(signupToken)
+	if errors.Is(err, errInvalidSignupToken) {
+		return "", errorCodeInvalidSignupToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	if !signup.emailAddressVerified {
+		return "", errorCodeEmailAddressNotVerified
+	}
+
+	webauthnCredentialIdValid := verifyPasskeyWebauthnCredentialIdLength(webauthnCredentialId)
+	if !webauthnCredentialIdValid {
+		return "", errorCodeInvalidWebauthnCredentialId
+	}
+
+	if len(webauthnAuthenticatorId) != webauthn.AuthenticatorIdSize {
+		return "", errorCodeInvalidWebauthnAuthenticatorId
+	}
+
+	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(webauthnCredentialId)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+	if !webauthnCredentialIdAvailable {
+		return "", errorCodeWebauthnCredentialIdAlreadyUsed
+	}
+
+	if signatureAlgorithm == passkeySignatureAlgorithmEd25519 {
+		if len(publicKey) != ed25519.PublicKeySize {
+			return "", errorCodeInvalidPublicKey
+		}
+	} else if signatureAlgorithm == passkeySignatureAlgorithmECDSAP256SHA256 {
+		ecdsaPublicKey, err := parseECDSASEC1PublicKey(elliptic.P256(), publicKey)
+		if err != nil {
+			return "", errorCodeInvalidPublicKey
+		}
+		publicKey = elliptic.MarshalCompressed(elliptic.P256(), ecdsaPublicKey.X, ecdsaPublicKey.Y)
+	} else if signatureAlgorithm == passkeySignatureAlgorithmRSASSAPKCS1V15SHA256 {
+		rsaPublicKey, err := x509.ParsePKCS1PublicKey(publicKey)
+		if err != nil {
+			return "", errorCodeInvalidPublicKey
+		}
+		// TODO: Accept 3072 bits?
+		if rsaPublicKey.Size() != 256 {
+			return "", errorCodeInvalidPublicKey
+		}
+		if rsaPublicKey.E != 65537 {
+			return "", errorCodeInvalidPublicKey
+		}
+	} else {
+		return "", errorCodeInvalidSignatureAlgorithm
+	}
+
+	signupPasskeyRegistration, err := server.createSignupPasskeyRegistration(signup.id, signatureAlgorithm, publicKey, webauthnCredentialId, webauthnAuthenticatorId)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to create signup passkey registration: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	server.logSignupPasskeyRegistrationStartedRequestEvent(requestId, signup.id, signup.emailAddress, signupPasskeyRegistration.id)
+
+	return signupPasskeyRegistration.id, ""
+}
+
+func (server *serverStruct) cancelSignupPasskeyRegistrationAction(requestId string, signupToken string, signupPasskeyRegistrationId string) string {
+	const (
+		errorCodeInvalidSignupToken                = "invalid_signup_token"
+		errorCodeEmailAddressNotVerified           = "email_address_not_verified"
+		errorCodeSignupPasskeyRegistrationNotFound = "signup_passkey_registration_not_found"
+		errorCodeSignupMismatch                    = "signup_mismatch"
+		errorCodeConflict                          = "conflict"
+		errorCodeUnexpectedError                   = "unexpected_error"
+	)
+
+	signup, err := server.validateSignupToken(signupToken)
+	if errors.Is(err, errInvalidSignupToken) {
+		return errorCodeInvalidSignupToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	if !signup.emailAddressVerified {
+		return errorCodeEmailAddressNotVerified
+	}
+
+	signupPasskeyRegistration, err := server.getSignupPasskeyRegistration(signupPasskeyRegistrationId)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeSignupPasskeyRegistrationNotFound
+	}
+
+	if signupPasskeyRegistration.signupId != signup.id {
+		return errorCodeSignupMismatch
+	}
+
+	err = server.deleteSignupPasskeyRegistration(signupPasskeyRegistration.id)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to delete signup passkey registration: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	return ""
+}
+
+func (server *serverStruct) setSignupPasskeyRegistrationPasskeyNameAction(requestId string, signupToken string, signupPasskeyRegistrationId string, passkeyName string) (string, string) {
+	const (
+		errorCodeInvalidSignupToken                = "invalid_signup_token"
+		errorCodeEmailAddressNotVerified           = "email_address_not_verified"
+		errorCodeSignupPasskeyRegistrationNotFound = "signup_passkey_registration_not_found"
+		errorCodeSignupMismatch                    = "signup_mismatch"
+		errorCodeInvalidPasskeyName                = "invalid_passkey_name"
+		errorCodeWebauthnCredentialIdAlreadyUsed   = "webauthn_credential_id_already_used"
+		errorCodeEmailAddressAlreadyUsed           = "email_address_already_used"
+		errorCodeConflict                          = "conflict"
+		errorCodeUnexpectedError                   = "unexpected_error"
+	)
+
+	signup, err := server.validateSignupToken(signupToken)
+	if errors.Is(err, errInvalidSignupToken) {
+		return "", errorCodeInvalidSignupToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	if !signup.emailAddressVerified {
+		return "", errorCodeEmailAddressNotVerified
+	}
+
+	signupPasskeyRegistration, err := server.getSignupPasskeyRegistration(signupPasskeyRegistrationId)
+	if errors.Is(err, errItemNotFound) {
+		return "", errorCodeSignupPasskeyRegistrationNotFound
+	}
+
+	if signupPasskeyRegistration.signupId != signup.id {
+		return "", errorCodeSignupMismatch
+	}
+
+	passkeyNameValid := verifyPasskeyNamePattern(passkeyName)
+	if !passkeyNameValid {
+		return "", errorCodeInvalidPasskeyName
+	}
+
+	emailAddressAvailable, err := server.checkUserEmailAddressAvailability(signup.emailAddress)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to check user email address availability: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+	if !emailAddressAvailable {
+		return "", errorCodeEmailAddressAlreadyUsed
+	}
+
+	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(signupPasskeyRegistration.passkeyWebauthnCredentialId)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+	if !webauthnCredentialIdAvailable {
+		return "", errorCodeWebauthnCredentialIdAlreadyUsed
+	}
+
+	user, passkey, session, sessionSecret, err := server.completeSignupWithPasskeyRegistration(signup.id, signupPasskeyRegistration.id, passkeyName)
+	if errors.Is(err, errItemNotFound) || errors.Is(err, errItemConflict) {
+		return "", errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to complete signup with passkey registration: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	server.logSignupCompletedWithPasskeyRegistrationRequestEvent(requestId, signup.id, signup.emailAddress, signupPasskeyRegistration.id, user.id, passkey.id, session.id)
+
+	sessionToken := createSessionToken(session.id, sessionSecret)
+
+	return sessionToken, ""
+}
+
+func (server *serverStruct) startPasskeySigninAction(requestId string) (string, []byte, string) {
+	const (
+		errorCodeInvalidEmailAddress = "invalid_email_address"
+		errorCodeUnexpectedError     = "unexpected_error"
+	)
+
+	passkeySignin, err := server.createPasskeySignin()
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to create passkey signin: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", nil, errorCodeUnexpectedError
+	}
+
+	server.logPasskeySigninStartedRequestEvent(requestId, passkeySignin.id)
+
+	return passkeySignin.id, passkeySignin.challenge, ""
+}
+
+func (server *serverStruct) cancelPasskeySigninAction(requestId string, passkeySigninToken string) string {
+	const (
+		errorCodePasskeySigninNotFound = "passkey_signin_not_found"
+		errorCodeConflict              = "conflict"
+		errorCodeUnexpectedError       = "unexpected_error"
+	)
+
+	passkeySignin, err := server.getPasskeySignin(passkeySigninToken)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodePasskeySigninNotFound
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate passkey sign in token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	err = server.deletePasskeySignin(passkeySignin.id)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to complete passkey signin: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	return ""
+}
+
+func (server *serverStruct) verifyPasskeySigninWebauthnSignatureAction(
+	requestId string,
+	passkeySigninId string,
+	webauthnCredentialId []byte,
+	webauthnAuthenticatorData []byte,
+	webauthnClientDataJSON []byte,
+	webauthnSignature []byte,
+) (string, string) {
+	const (
+		errorCodePasskeySigninNotFound            = "passkey_signin_not_found"
+		errorCodePasskeyNotFound                  = "passkey_not_found"
+		errorCodeInvalidWebauthnAuthenticatorData = "invalid_webauthn_authenticator_data"
+		errorCodeInvalidWebauthnClientDataJSON    = "invalid_webauthn_client_data_json"
+		errorCodeInvalidWebauthnSignature         = "invalid_webauthn_signature"
+		errorCodeConflict                         = "conflict"
+		errorCodeUnexpectedError                  = "unexpected_error"
+	)
+
+	passkeySignin, err := server.getPasskeySignin(passkeySigninId)
+	if errors.Is(err, errItemNotFound) {
+		return "", errorCodePasskeySigninNotFound
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate passkey sign in token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	passkey, err := server.getPasskeyByWebauthnCredentialId(webauthnCredentialId)
+	if errors.Is(err, errItemNotFound) {
+		return "", errorCodePasskeyNotFound
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get passkey by webauthn credential id: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	parsedAuthenticatorData, err := webauthn.ParseAssertionAuthenticatorData(webauthnAuthenticatorData)
+	if err != nil {
+		return "", errorCodeInvalidWebauthnAuthenticatorData
+	}
+	if !parsedAuthenticatorData.UserPresent || !parsedAuthenticatorData.UserVerified {
+		return "", errorCodeInvalidWebauthnAuthenticatorData
+	}
+	relyingPartyIdMatched := parsedAuthenticatorData.CompareRelyingPartyIdAgainstHash(server.webauthnRelyingPartyId)
+	if !relyingPartyIdMatched {
+		return "", errorCodeInvalidWebauthnAuthenticatorData
+	}
+
+	clientData, err := webauthn.ParseClientDataJSON(webauthnClientDataJSON)
+	if err != nil {
+		return "", errorCodeInvalidWebauthnClientDataJSON
+	}
+	if clientData.Type != webauthn.ClientDataTypeWebauthnGet {
+		return "", errorCodeInvalidWebauthnClientDataJSON
+	}
+	if clientData.Origin != server.origin {
+		return "", errorCodeInvalidWebauthnClientDataJSON
+	}
+	challengeEqual := passkeySignin.compareChallenge(clientData.Challenge)
+	if !challengeEqual {
+		return "", errorCodeInvalidWebauthnClientDataJSON
+	}
+	if clientData.CrossOrigin {
+		return "", errorCodeInvalidWebauthnClientDataJSON
+	}
+
+	signatureMessage := webauthn.CreateAssertionSignatureMessage(webauthnAuthenticatorData, webauthnClientDataJSON)
+
+	signatureValid := false
+	if passkey.signatureAlgorithm == passkeySignatureAlgorithmEd25519 {
+		signatureValid = ed25519.Verify(ed25519.PublicKey(passkey.publicKey), signatureMessage, webauthnSignature)
+	} else if passkey.signatureAlgorithm == passkeySignatureAlgorithmECDSAP256SHA256 {
+		ecdsaPublicKey, err := parseECDSASEC1CompressedPublicKey(elliptic.P256(), passkey.publicKey)
+		if err != nil {
+			errorMessage := fmt.Sprintf("failed to parse ecdsa compressed sec1 public key: %s", err.Error())
+			server.logActionError(requestId, errorMessage)
+			return "", errorCodeUnexpectedError
+		}
+
+		messageHash := sha256.Sum256(signatureMessage)
+		signatureValid = ecdsa.VerifyASN1(ecdsaPublicKey, messageHash[:], webauthnSignature)
+	} else if passkey.signatureAlgorithm == passkeySignatureAlgorithmRSASSAPKCS1V15SHA256 {
+		rsaPublicKey, err := x509.ParsePKCS1PublicKey(passkey.publicKey)
+		if err != nil {
+			errorMessage := fmt.Sprintf("failed to rsa pkcs1 public key: %s", err.Error())
+			server.logActionError(requestId, errorMessage)
+			return "", errorCodeUnexpectedError
+		}
+
+		messageHash := sha256.Sum256(signatureMessage)
+		err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, messageHash[:], webauthnSignature)
+		signatureValid = err == nil
+	} else {
+		errorMessage := fmt.Sprintf("unknown public key algorithm '%s'", passkey.signatureAlgorithm)
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	if !signatureValid {
+		server.logPasskeySigninSignatureVerificationFailedRequestEvent(requestId, passkeySignin.id, passkey.id, passkey.userId)
+
+		return "", errorCodeInvalidWebauthnSignature
+	}
+
+	session, sessionSecret, err := server.completePasskeySignin(passkeySignin.id, passkey.userId)
+	if errors.Is(err, errItemNotFound) || errors.Is(err, errItemConflict) {
+		return "", errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to complete passkey signin: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	server.logPasskeySigninCompletedRequestEvent(requestId, passkeySignin.id, passkey.id, passkey.userId, session.id)
+
+	user, err := server.getUser(session.userId)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get user: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	err = server.sendSignedInNotificationEmail(user.emailAddress)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to send signed in email: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	server.logRequestEmail(requestId, user.emailAddress, emailTypeSignedInNotification)
+
+	sessionToken := createSessionToken(session.id, sessionSecret)
+
+	return sessionToken, ""
+}
+
+func (server *serverStruct) startEmailCodeSigninAction(requestId string, emailAddress string) (string, string) {
+	const (
+		errorCodeInvalidEmailAddress = "invalid_email_address"
+		errorCodeUserNotFound        = "user_not_found"
+		errorCodeRateLimited         = "rate_limited"
+		errorCodeUnexpectedError     = "unexpected_error"
+	)
+
+	emailAddressValid := verifyAccountIdentifierEmailAddressPattern(emailAddress)
+	if !emailAddressValid {
+		return "", errorCodeInvalidEmailAddress
+	}
+
+	user, err := server.getUserByEmailAddress(emailAddress)
+	if errors.Is(err, errItemNotFound) {
+		return "", errorCodeUserNotFound
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get user by email address: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	rateLimitAllowed := server.emailRateLimit.Consume(user.emailAddress)
+	if !rateLimitAllowed {
+		return "", errorCodeRateLimited
+	}
+
+	emailCodeSignin, emailCodeSigninSecret, emailCode, err := server.createEmailCodeSignin(user.id)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to create signin: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	server.logEmailCodeSigninStartedRequestEvent(requestId, emailCodeSignin.id, emailCodeSignin.userId, user.emailAddress)
+
+	err = server.sendSigninEmailCode(user.emailAddress, emailCode)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to send signin email code: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	server.logRequestEmail(requestId, user.emailAddress, emailTypeSigninEmailCode)
+
+	sessionToken := createSessionToken(emailCodeSignin.id, emailCodeSigninSecret)
+
+	return sessionToken, ""
+}
+
+func (server *serverStruct) cancelEmailCodeSigninAction(requestId string, emailCodeSigninToken string) string {
+	const (
+		errorCodeInvalidEmailCodeSigninToken = "invalid_email_code_signin_token"
+		errorCodeConflict                    = "conflict"
+		errorCodeUnexpectedError             = "unexpected_error"
+	)
+
+	emailCodeSignin, err := server.validateEmailCodeSigninToken(emailCodeSigninToken)
+	if errors.Is(err, errInvalidEmailCodeSigninToken) {
+		return errorCodeInvalidEmailCodeSigninToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate email code signin token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	err = server.deleteEmailCodeSignin(emailCodeSignin.id)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to delete email code signin: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	return ""
+}
+
+func (server *serverStruct) verifyEmailCodeSigninEmailCodeAction(requestId string, emailCodeSigninToken string, emailCode string) (string, string) {
+	const (
+		errorCodeInvalidEmailCodeSigninToken = "invalid_email_code_signin_token"
+		errorCodeIncorrectEmailCode          = "incorrect_email_code"
+		errorCodeConflict                    = "conflict"
+		errorCodeUnexpectedError             = "unexpected_error"
+		errorCodeRateLimited                 = "rate_limited"
+	)
+
+	emailCodeSignin, err := server.validateEmailCodeSigninToken(emailCodeSigninToken)
+	if errors.Is(err, errInvalidEmailCodeSigninToken) {
+		return "", errorCodeInvalidEmailCodeSigninToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate email code signin token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	userEmailAddress, err := server.getEmailCodeSigninUserEmailAddress(emailCodeSignin.id)
+	if errors.Is(err, errItemNotFound) {
+		return "", errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get email code signin user email address: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	rateLimitAllowed := server.userEmailCodeVerificationAuthenticationRateLimit.Consume(emailCodeSignin.userId)
+	if !rateLimitAllowed {
+		return "", errorCodeRateLimited
+	}
+
+	emailCodeHash := server.hashEmailCode(emailCode, emailCodeSignin.emailCodeSalt)
+	emailCodeCorrect := constantTimeCompare(emailCodeSignin.emailCodeHash, emailCodeHash)
+	if !emailCodeCorrect {
+		server.logEmailCodeSigninEmailCodeVerificationFailedRequestEvent(requestId, emailCodeSignin.id, emailCodeSignin.userId, userEmailAddress)
+		return "", errorCodeIncorrectEmailCode
+	}
+
+	session, sessionSecret, err := server.completeEmailCodeSignin(emailCodeSignin.id)
+	if errors.Is(err, errItemNotFound) || errors.Is(err, errItemConflict) {
+		return "", errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to complete email code signin: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	server.logEmailCodeSigninCompletedRequestEvent(requestId, emailCodeSignin.id, emailCodeSignin.userId, userEmailAddress, session.id)
+
+	err = server.sendSignedInNotificationEmail(userEmailAddress)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to send signed in email: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	server.logRequestEmail(requestId, userEmailAddress, emailTypeSignedInNotification)
+
+	sessionToken := createSessionToken(session.id, sessionSecret)
+
+	return sessionToken, ""
+}
+
+func (server *serverStruct) signOutAction(requestId string, sessionToken string) string {
+	const (
+		errorCodeInvalidSessionToken = "invalid_session_token"
+		errorCodeConflict            = "conflict"
+		errorCodeUnexpectedError     = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	err = server.deleteSession(session.id)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to delete session: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	return ""
+}
+
+func (server *serverStruct) signOutAllDevices(requestId string, sessionToken string) string {
+	const (
+		errorCodeInvalidSessionToken = "invalid_session_token"
+		errorCodeConflict            = "conflict"
+		errorCodeUnexpectedError     = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	err = server.deleteUserSessions(session.userId)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to delete user sessions: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	return ""
+}
+
+func (server *serverStruct) cancelIdentityVerificationAction(requestId string, sessionToken string, identityVerificationToken string) (string, string) {
+	const (
+		errorCodeInvalidSessionToken              = "invalid_session_token"
+		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification"
+		errorCodeSessionMismatch                  = "session_mismatch"
+		errorCodeConflict                         = "conflict"
+		errorCodeUnexpectedError                  = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return "", errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	identityVerification, err := server.validateIdentityVerificationToken(identityVerificationToken)
+	if errors.Is(err, errInvalidIdentityVerificationToken) {
+		return "", errorCodeInvalidIdentityVerificationToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate identity verification token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	if identityVerification.sessionId != session.id {
+		return "", errorCodeSessionMismatch
+	}
+
+	if identityVerification.verifyingAction == identityVerificationVerifyingActionEmailAddressUpdate {
+		err = server.deleteEmailAddressUpdate(identityVerification.verifyingActionId)
+		if errors.Is(err, errItemNotFound) {
+			return "", errorCodeConflict
+		}
+		if err != nil {
+			errorMessage := fmt.Sprintf("failed to delete email address update: %s", err.Error())
+			server.logActionError(requestId, errorMessage)
+			return "", errorCodeUnexpectedError
+		}
+	} else if identityVerification.verifyingAction == identityVerificationVerifyingActionPasskeyRegistration {
+		err = server.deletePasskeyRegistration(identityVerification.verifyingActionId)
+		if errors.Is(err, errItemNotFound) {
+			return "", errorCodeConflict
+		}
+		if err != nil {
+			errorMessage := fmt.Sprintf("failed to delete passkey registration: %s", err.Error())
+			server.logActionError(requestId, errorMessage)
+			return "", errorCodeUnexpectedError
+		}
+	} else if identityVerification.verifyingAction == identityVerificationVerifyingActionPasskeyDeletion {
+		err = server.deletePasskeyDeletion(identityVerification.verifyingActionId)
+		if errors.Is(err, errItemNotFound) {
+			return "", errorCodeConflict
+		}
+		if err != nil {
+			errorMessage := fmt.Sprintf("failed to delete passkey deletion: %s", err.Error())
+			server.logActionError(requestId, errorMessage)
+			return "", errorCodeUnexpectedError
+		}
+	} else if identityVerification.verifyingAction == identityVerificationVerifyingActionAccountDeletion {
+		err = server.deleteEmailAddressUpdate(identityVerification.verifyingActionId)
+		if errors.Is(err, errItemNotFound) {
+			return "", errorCodeConflict
+		}
+		if err != nil {
+			errorMessage := fmt.Sprintf("failed to delete account deletion: %s", err.Error())
+			server.logActionError(requestId, errorMessage)
+			return "", errorCodeUnexpectedError
+		}
+	} else {
+		errorMessage := fmt.Sprintf("unknown identity verification verifying action '%s'", identityVerification.verifyingAction)
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	return identityVerification.verifyingAction, ""
+}
+
+func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAction(
+	requestId string,
+	sessionToken string,
+	identityVerificationToken string,
+	webauthnCredentialId []byte,
+	webauthnAuthenticatorData []byte,
+	webauthnClientDataJSON []byte,
+	webauthnSignature []byte,
+) (string, string) {
+	const (
+		errorCodeInvalidSessionToken                  = "invalid_session_token"
+		errorCodeInvalidIdentityVerificationToken     = "invalid_identity_verification"
+		errorCodeSessionMismatch                      = "session_mismatch"
+		errorCodeIdentityVerificationAlreadyCompleted = "identity_verification_already_completed"
+		errorCodePasskeyNotFound                      = "passkey_not_found"
+		errorCodeUserMismatch                         = "user_mismatch"
+		errorCodeInvalidWebauthnAuthenticatorData     = "invalid_webauthn_authenticator_data"
+		errorCodeInvalidWebauthnClientDataJSON        = "invalid_webauthn_client_data_json"
+		errorCodeInvalidWebauthnSignature             = "invalid_webauthn_signature"
+		errorCodeConflict                             = "conflict"
+		errorCodeUnexpectedError                      = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return "", errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	identityVerification, err := server.validateIdentityVerificationToken(identityVerificationToken)
+	if errors.Is(err, errInvalidIdentityVerificationToken) {
+		return "", errorCodeInvalidIdentityVerificationToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate identity verification token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	if identityVerification.sessionId != session.id {
+		return "", errorCodeSessionMismatch
+	}
+
+	passkey, err := server.getPasskeyByWebauthnCredentialId(webauthnCredentialId)
+	if errors.Is(err, errItemNotFound) {
+		return "", errorCodePasskeyNotFound
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get passkey by webauthn credential id: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	if passkey.userId != session.userId {
+		return "", errorCodeUserMismatch
+	}
+
+	parsedAuthenticatorData, err := webauthn.ParseAssertionAuthenticatorData(webauthnAuthenticatorData)
+	if err != nil {
+		return "", errorCodeInvalidWebauthnAuthenticatorData
+	}
+	if !parsedAuthenticatorData.UserPresent || !parsedAuthenticatorData.UserVerified {
+		return "", errorCodeInvalidWebauthnAuthenticatorData
+	}
+	relyingPartyIdMatched := parsedAuthenticatorData.CompareRelyingPartyIdAgainstHash(server.webauthnRelyingPartyId)
+	if !relyingPartyIdMatched {
+		return "", errorCodeInvalidWebauthnAuthenticatorData
+	}
+
+	clientData, err := webauthn.ParseClientDataJSON(webauthnClientDataJSON)
+	if err != nil {
+		return "", errorCodeInvalidWebauthnClientDataJSON
+	}
+	if clientData.Type != webauthn.ClientDataTypeWebauthnGet {
+		return "", errorCodeInvalidWebauthnClientDataJSON
+	}
+	if clientData.Origin != server.origin {
+		return "", errorCodeInvalidWebauthnClientDataJSON
+	}
+	challengeEqual := identityVerification.comparePasskeyVerificationChallenge(clientData.Challenge)
+	if !challengeEqual {
+		return "", errorCodeInvalidWebauthnClientDataJSON
+	}
+	if clientData.CrossOrigin {
+		return "", errorCodeInvalidWebauthnClientDataJSON
+	}
+
+	signatureMessage := webauthn.CreateAssertionSignatureMessage(webauthnAuthenticatorData, webauthnClientDataJSON)
+
+	signatureValid := false
+	if passkey.signatureAlgorithm == passkeySignatureAlgorithmEd25519 {
+		signatureValid = ed25519.Verify(ed25519.PublicKey(passkey.publicKey), signatureMessage, webauthnSignature)
+	} else if passkey.signatureAlgorithm == passkeySignatureAlgorithmECDSAP256SHA256 {
+		ecdsaPublicKey, err := parseECDSASEC1CompressedPublicKey(elliptic.P256(), passkey.publicKey)
+		if err != nil {
+			errorMessage := fmt.Sprintf("failed to parse ecdsa compressed sec1 public key: %s", err.Error())
+			server.logActionError(requestId, errorMessage)
+			return "", errorCodeUnexpectedError
+		}
+
+		messageHash := sha256.Sum256(signatureMessage)
+		signatureValid = ecdsa.VerifyASN1(ecdsaPublicKey, messageHash[:], webauthnSignature)
+	} else if passkey.signatureAlgorithm == passkeySignatureAlgorithmRSASSAPKCS1V15SHA256 {
+		rsaPublicKey, err := x509.ParsePKCS1PublicKey(passkey.publicKey)
+		if err != nil {
+			errorMessage := fmt.Sprintf("failed to rsa pkcs1 public key: %s", err.Error())
+			server.logActionError(requestId, errorMessage)
+			return "", errorCodeUnexpectedError
+		}
+
+		messageHash := sha256.Sum256(signatureMessage)
+		err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, messageHash[:], webauthnSignature)
+		signatureValid = err == nil
+	} else {
+		errorMessage := fmt.Sprintf("unknown public key algorithm '%s'", passkey.signatureAlgorithm)
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	if !signatureValid {
+		server.logIdentityVerificationPasskeyWebauthnSignatureVerificationFailedRequestEvent(
+			requestId,
+			session.id,
+			session.userId,
+			identityVerification.id,
+			identityVerification.verifyingAction,
+			identityVerification.verifyingActionId,
+			passkey.id)
+
+		return "", errorCodeInvalidWebauthnSignature
+	}
+
+	err = server.completeIdentityVerification(identityVerification.verifyingAction, identityVerification.verifyingActionId)
+	if errors.Is(err, errItemNotFound) || errors.Is(err, errItemConflict) {
+		return "", errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to complete email address update identity verification: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	server.logIdentityVerificationPasskeyVerificationCompletedRequestEvent(requestId, session.id, session.userId, identityVerification.id, identityVerification.verifyingAction, identityVerification.verifyingActionId, passkey.id)
+
+	return identityVerification.verifyingAction, ""
+}
+
+func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId string, sessionToken string, identityVerificationToken string) string {
+	const (
+		errorCodeInvalidSessionToken              = "invalid_session_token"
+		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification"
+		errorCodeSessionMismatch                  = "session_mismatch"
+		errorCodeConflict                         = "conflict"
+		errorCodeUnexpectedError                  = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	identityVerification, err := server.validateIdentityVerificationToken(identityVerificationToken)
+	if errors.Is(err, errInvalidIdentityVerificationToken) {
+		return errorCodeInvalidIdentityVerificationToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate identity verification token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	if identityVerification.sessionId != session.id {
+		return errorCodeSessionMismatch
+	}
+
+	emailCode, userEmailAddress, err := server.issueIdentityVerificationEmailCode(identityVerification.id)
+	if errors.Is(err, errItemConflict) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to create identity verification email code verification: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	server.logIdentityVerificationEmailCodeIssuedRequestEvent(requestId, session.id, session.userId, identityVerification.id, identityVerification.verifyingAction, identityVerification.verifyingActionId, userEmailAddress)
+
+	err = server.sendIdentityVerificationEmailCode(userEmailAddress, emailCode)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to send identity verification email code: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	server.logRequestEmail(requestId, userEmailAddress, emailTypeIdentityVerificationEmailCode)
+
+	return ""
+}
+
+func (server *serverStruct) revokeIdentityVerificationEmailCodeAction(requestId string, sessionToken string, identityVerificationToken string) string {
+	const (
+		errorCodeInvalidSessionToken              = "invalid_session_token"
+		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification"
+		errorCodeSessionMismatch                  = "session_mismatch"
+		errorCodeEmailCodeNotIssued               = "email_code_not_issued"
+		errorCodeConflict                         = "conflict"
+		errorCodeUnexpectedError                  = "unexpected_error"
+		errorCodeRateLimited                      = "rate_limited"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	identityVerification, err := server.validateIdentityVerificationToken(identityVerificationToken)
+	if errors.Is(err, errInvalidIdentityVerificationToken) {
+		return errorCodeInvalidIdentityVerificationToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate identity verification token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	if identityVerification.sessionId != session.id {
+		return errorCodeSessionMismatch
+	}
+
+	if !identityVerification.emailCodeHashDefined {
+		return errorCodeEmailCodeNotIssued
+	}
+
+	err = server.revokeIdentityVerificationEmailCode(identityVerification.id)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to revoke identity verification email code: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	return ""
+}
+
+func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId string, sessionToken string, identityVerificationToken string, emailCode string) (string, string) {
+	const (
+		errorCodeInvalidSessionToken              = "invalid_session_token"
+		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification"
+		errorCodeSessionMismatch                  = "session_mismatch"
+		errorCodeEmailCodeNotIssued               = "email_code_not_issued"
+		errorCodeIncorrectEmailCode               = "incorrect_email_code"
+		errorCodeConflict                         = "conflict"
+		errorCodeUnexpectedError                  = "unexpected_error"
+		errorCodeRateLimited                      = "rate_limited"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return "", errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	identityVerification, err := server.validateIdentityVerificationToken(identityVerificationToken)
+	if errors.Is(err, errInvalidIdentityVerificationToken) {
+		return "", errorCodeInvalidIdentityVerificationToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate identity verification token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	if identityVerification.sessionId != session.id {
+		return "", errorCodeSessionMismatch
+	}
+
+	if !identityVerification.emailCodeHashDefined {
+		return "", errorCodeEmailCodeNotIssued
+	}
+
+	if !identityVerification.emailCodeSaltDefined {
+		errorMessage := "identity verification email code salt not defined"
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	userEmailAddress, err := server.getIdentityVerificationUserEmailAddress(identityVerification.id)
+	if errors.Is(err, errItemNotFound) {
+		return "", errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get identity verification email code verification user email address: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	rateLimitAllowed := server.userEmailCodeVerificationAuthenticationRateLimit.Consume(session.userId)
+	if !rateLimitAllowed {
+		return "", errorCodeRateLimited
+	}
+
+	emailCodeHash := server.hashEmailCode(emailCode, identityVerification.emailCodeSalt)
+	emailCodeCorrect := constantTimeCompare(identityVerification.emailCodeHash, emailCodeHash)
+	if !emailCodeCorrect {
+		server.logIdentityVerificationEmailCodeVerificationFailedRequestEvent(
+			requestId,
+			session.id,
+			session.userId,
+			identityVerification.id,
+			identityVerification.verifyingAction,
+			identityVerification.verifyingActionId,
+			userEmailAddress,
+		)
+		return "", errorCodeIncorrectEmailCode
+	}
+
+	err = server.completeIdentityVerification(identityVerification.verifyingAction, identityVerification.verifyingActionId)
+	if errors.Is(err, errItemNotFound) || errors.Is(err, errItemConflict) {
+		return "", errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to complete email address update identity verification: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", errorCodeUnexpectedError
+	}
+
+	server.logIdentityVerificationEmailCodeVerificationCompletedRequestEvent(
+		requestId,
+		session.id,
+		session.userId,
+		identityVerification.id,
+		identityVerification.verifyingAction,
+		identityVerification.verifyingActionId,
+		userEmailAddress,
+	)
+
+	return identityVerification.verifyingAction, ""
+}
+
+func (server *serverStruct) startEmailAddressUpdateAction(requestId string, sessionToken string) (string, string, string) {
+	const (
+		errorCodeInvalidSessionToken = "invalid_session_token"
+		errorCodeConflict            = "conflict"
+		errorCodeUnexpectedError     = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return "", "", errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", "", errorCodeUnexpectedError
+	}
+
+	emailAddressUpdate, emailAddressUpdateSecret, identityVerification, identityVerificationSecret, err := server.createEmailAddressUpdate(session.id)
+	if errors.Is(err, errItemNotFound) {
+		return "", "", errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to create email address update: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", "", errorCodeUnexpectedError
+	}
+
+	server.logEmailAddressUpdateStartedRequestEvent(requestId, session.id, session.userId, emailAddressUpdate.id, identityVerification.id)
+
+	emailAddressUpdateToken := createSessionToken(emailAddressUpdate.id, emailAddressUpdateSecret)
+	identityVerificationToken := createSessionToken(identityVerification.id, identityVerificationSecret)
+
+	return emailAddressUpdateToken, identityVerificationToken, ""
+}
+
+func (server *serverStruct) cancelEmailAddressUpdateAction(requestId string, sessionToken string, emailAddressUpdateToken string) string {
+	const (
+		errorCodeInvalidSessionToken            = "invalid_session_token"
+		errorCodeInvalidEmailAddressUpdateToken = "invalid_email_address_update_token"
+		errorCodeSessionMismatch                = "session_mismatch"
+		errorCodeConflict                       = "conflict"
+		errorCodeUnexpectedError                = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	emailAddressUpdate, err := server.validateEmailAddressUpdateToken(emailAddressUpdateToken)
+	if errors.Is(err, errInvalidEmailAddressUpdateToken) {
+		return errorCodeInvalidEmailAddressUpdateToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get email address update: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	if emailAddressUpdate.sessionId != session.id {
+		return errorCodeSessionMismatch
+	}
+
+	err = server.deleteEmailAddressUpdate(emailAddressUpdate.id)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to delete email address update: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	return ""
+}
+
+func (server *serverStruct) setEmailAddressUpdateNewEmailAddressAction(requestId string, sessionToken string, emailAddressUpdateToken string, newEmailAddress string) string {
+	const (
+		errorCodeInvalidSessionToken            = "invalid_session_token"
+		errorCodeInvalidEmailAddressUpdateToken = "invalid_email_address_update_token"
+		errorCodeSessionMismatch                = "session_mismatch"
+		errorCodeIdentityNotVerified            = "identity_not_verified"
+		errorCodeNewEmailAddressAlreadySet      = "new_email_address_already_set"
+		errorCodeInvalidEmailAddress            = "invalid_email_address"
+		errorCodeEmailAddressAlreadyUsed        = "email_address_already_used"
+		errorCodeRateLimited                    = "rate_limited"
+		errorCodeConflict                       = "conflict"
+		errorCodeUnexpectedError                = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	emailAddressUpdate, err := server.validateEmailAddressUpdateToken(emailAddressUpdateToken)
+	if errors.Is(err, errInvalidEmailAddressUpdateToken) {
+		return errorCodeInvalidEmailAddressUpdateToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get email address update: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if emailAddressUpdate.sessionId != session.id {
+		return errorCodeSessionMismatch
+	}
+	if !emailAddressUpdate.identityVerified {
+		return errorCodeIdentityNotVerified
+	}
+
+	if emailAddressUpdate.newEmailAddressDefined {
+		return errorCodeNewEmailAddressAlreadySet
+	}
+
+	if !verifyAccountIdentifierEmailAddressPattern(newEmailAddress) {
+		return errorCodeInvalidEmailAddress
+	}
+
+	newEmailAddressAvailable, err := server.checkUserEmailAddressAvailability(newEmailAddress)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to check user email address availability: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if !newEmailAddressAvailable {
+		return errorCodeEmailAddressAlreadyUsed
+	}
+
+	rateLimitAllowed := server.emailRateLimit.Consume(newEmailAddress)
+	if !rateLimitAllowed {
+		return errorCodeRateLimited
+	}
+
+	newEmailAddressVerificationCode, err := server.setEmailAddressUpdateNewEmailAddress(emailAddressUpdate.id, newEmailAddress)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to set email address update new email address: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	err = server.sendEmailAddressUpdateNewEmailAddressVerificationCodeEmail(newEmailAddress, newEmailAddressVerificationCode)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to send email address update new email address verification code email: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	server.logRequestEmail(requestId, newEmailAddress, emailTypeEmailAddressUpdateNewEmailAddressVerificationCode)
+
+	return ""
+}
+
+func (server *serverStruct) sendEmailAddressUpdateNewEmailAddressVerificationCodeAction(requestId string, sessionToken string, emailAddressUpdateToken string) string {
+	const (
+		errorCodeInvalidSessionToken            = "invalid_session_token"
+		errorCodeInvalidEmailAddressUpdateToken = "invalid_email_address_update_token"
+		errorCodeSessionMismatch                = "session_mismatch"
+		errorCodeIdentityNotVerified            = "identity_not_verified"
+		errorCodeNewEmailAddressNotSet          = "new_email_address_not_set"
+		errorCodeEmailAddressAlreadyUsed        = "email_address_already_used"
+		errorCodeRateLimited                    = "rate_limited"
+		errorCodeConflict                       = "conflict"
+		errorCodeUnexpectedError                = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	emailAddressUpdate, err := server.validateEmailAddressUpdateToken(emailAddressUpdateToken)
+	if errors.Is(err, errInvalidEmailAddressUpdateToken) {
+		return errorCodeInvalidEmailAddressUpdateToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get email address update: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if emailAddressUpdate.sessionId != session.id {
+		return errorCodeSessionMismatch
+	}
+	if !emailAddressUpdate.identityVerified {
+		return errorCodeIdentityNotVerified
+	}
+
+	if !emailAddressUpdate.newEmailAddressDefined {
+		return errorCodeNewEmailAddressNotSet
+	}
+	if !emailAddressUpdate.newEmailAddressVerificationCodeDefined {
+		errorMessage := "new email address verification code not defined"
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	rateLimitAllowed := server.emailRateLimit.Consume(emailAddressUpdate.newEmailAddress)
+	if !rateLimitAllowed {
+		return errorCodeRateLimited
+	}
+
+	err = server.sendEmailAddressUpdateNewEmailAddressVerificationCodeEmail(emailAddressUpdate.newEmailAddress, emailAddressUpdate.newEmailAddressVerificationCode)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to send email address update new email address verification code email: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	server.logRequestEmail(requestId, emailAddressUpdate.newEmailAddress, emailTypeEmailAddressUpdateNewEmailAddressVerificationCode)
+
+	return ""
+}
+
+func (server *serverStruct) verifyEmailAddressUpdateNewEmailAddressVerificationCodeAction(requestId string, sessionToken string, emailAddressUpdateToken string, verificationCode string) string {
+	const (
+		errorCodeInvalidSessionToken            = "invalid_session_token"
+		errorCodeInvalidEmailAddressUpdateToken = "invalid_email_address_update_token"
+		errorCodeSessionMismatch                = "session_mismatch"
+		errorCodeIdentityNotVerified            = "identity_not_verified"
+		errorCodeNewEmailAddressNotSet          = "new_email_address_not_set"
+		errorCodeIncorrectVerificationCode      = "incorrect_verification_code"
+		errorCodeEmailAddressAlreadyUsed        = "email_address_already_used"
+		errorCodeRateLimited                    = "rate_limited"
+		errorCodeConflict                       = "conflict"
+		errorCodeUnexpectedError                = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	emailAddressUpdate, err := server.validateEmailAddressUpdateToken(emailAddressUpdateToken)
+	if errors.Is(err, errInvalidEmailAddressUpdateToken) {
+		return errorCodeInvalidEmailAddressUpdateToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get email address update: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if emailAddressUpdate.sessionId != session.id {
+		return errorCodeSessionMismatch
+	}
+	if !emailAddressUpdate.identityVerified {
+		return errorCodeIdentityNotVerified
+	}
+
+	if !emailAddressUpdate.newEmailAddressDefined {
+		return errorCodeNewEmailAddressNotSet
+	}
+
+	if !emailAddressUpdate.newEmailAddressVerificationCodeDefined {
+		errorMessage := "new email address verification code not defined"
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	rateLimitAllowed := server.emailAddressVerificationRateLimit.Consume(emailAddressUpdate.newEmailAddress)
+	if !rateLimitAllowed {
+		return errorCodeRateLimited
+	}
+
+	verificationCodeCorrect := emailAddressUpdate.compareNewEmailAddressVerificationCode(verificationCode)
+	if !verificationCodeCorrect {
+		server.logEmailAddressUpdateNewEmailAddressVerificationFailedRequestEvent(requestId, session.id, session.userId, emailAddressUpdate.id, emailAddressUpdate.newEmailAddress)
+		return errorCodeIncorrectVerificationCode
+	}
+
+	newEmailAddressAvailable, err := server.checkUserEmailAddressAvailability(emailAddressUpdate.newEmailAddress)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to check user email address availability: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if !newEmailAddressAvailable {
+		return errorCodeEmailAddressAlreadyUsed
+	}
+
+	oldUserEmailAddress, err := server.completeEmailAddressUpdate(emailAddressUpdate.id)
+	if errors.Is(err, errItemNotFound) || errors.Is(err, errItemConflict) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to complete email address update: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	server.logEmailAddressUpdateCompletedRequestEvent(requestId, session.id, session.userId, emailAddressUpdate.id, emailAddressUpdate.newEmailAddress)
+
+	err = server.sendEmailAddressUpdatedNotificationEmail(oldUserEmailAddress)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to send email address update email: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	server.logRequestEmail(requestId, oldUserEmailAddress, emailTypeEmailAddressUpdatedNotification)
+
+	return ""
+}
+
+func (server *serverStruct) startPasskeyRegistrationAction(requestId string, sessionToken string) (string, string, string) {
+	const (
+		errorCodeInvalidSessionToken = "invalid_session_token"
+		errorCodePasskeyLimitReached = "passkey_limit_reached"
+		errorCodeConflict            = "conflict"
+		errorCodeUnexpectedError     = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return "", "", errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", "", errorCodeUnexpectedError
+	}
+
+	userPasskeyCount, err := server.getUserPasskeyCount(session.userId)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get user passkey count: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", "", errorCodeUnexpectedError
+	}
+	if userPasskeyCount > maxPasskeyCountLimit {
+		return "", "", errorCodePasskeyLimitReached
+	}
+
+	passkeyRegistration, passkeyRegistrationSecret, identityVerification, identityVerificationSecret, err := server.createPasskeyRegistration(session.id)
+	if errors.Is(err, errItemNotFound) {
+		return "", "", errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to create passkey registration: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", "", errorCodeUnexpectedError
+	}
+
+	server.logPasskeyRegistrationStartedRequestEvent(requestId, session.id, session.userId, identityVerification.id, passkeyRegistration.id)
+
+	passkeyRegistrationToken := createSessionToken(passkeyRegistration.id, passkeyRegistrationSecret)
+	identityVerificationToken := createSessionToken(identityVerification.id, identityVerificationSecret)
+
+	return passkeyRegistrationToken, identityVerificationToken, ""
+}
+
+func (server *serverStruct) cancelPasskeyRegistrationAction(requestId string, sessionToken string, passkeyRegistrationToken string) string {
+	const (
+		errorCodeInvalidSessionToken             = "invalid_session_token"
+		errorCodeInvalidPasskeyRegistrationToken = "invalid_passkey_registration_token"
+		errorCodeSessionMismatch                 = "session_mismatch"
+		errorCodeConflict                        = "conflict"
+		errorCodeUnexpectedError                 = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	passkeyRegistration, err := server.validatePasskeyRegistrationToken(passkeyRegistrationToken)
+	if errors.Is(err, errInvalidPasskeyRegistrationToken) {
+		return errorCodeInvalidPasskeyRegistrationToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get passkey registration: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	if passkeyRegistration.sessionId != session.id {
+		return errorCodeSessionMismatch
+	}
+
+	err = server.deletePasskeyRegistration(passkeyRegistration.id)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to delete passkey registration: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	return ""
+}
+
+func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialAction(
+	requestId string,
+	sessionToken string,
+	passkeyRegistrationToken string,
+	webauthnCredentialId []byte,
+	signatureAlgorithm string,
+	publicKey []byte,
+	webauthnAuthenticatorId []byte,
+) string {
+	const (
+		errorCodeInvalidSessionToken                 = "invalid_session_token"
+		errorCodeInvalidPasskeyRegistrationToken     = "invalid_passkey_registration_token"
+		errorCodeSessionMismatch                     = "session_mismatch"
+		errorCodeIdentityNotVerified                 = "identity_not_verified"
+		errorCodePasskeyWebauthnCredentialAlreadySet = "webauthn_credential_already_set"
+		errorCodeInvalidSignatureAlgorithm           = "invalid_signature_algorithm"
+		errorCodeInvalidPublicKey                    = "invalid_public_key"
+		errorCodeInvalidWebauthnCredentialId         = "invalid_webauthn_credential_id"
+		errorCodeWebauthnCredentialIdAlreadyUsed     = "webauthn_credential_id_already_used"
+		errorCodeInvalidWebauthnAuthenticatorId      = "invalid_webauthn_authenticator_id"
+		errorCodeConflict                            = "conflict"
+		errorCodeUnexpectedError                     = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	passkeyRegistration, err := server.validatePasskeyRegistrationToken(passkeyRegistrationToken)
+	if errors.Is(err, errInvalidPasskeyRegistrationToken) {
+		return errorCodeInvalidPasskeyRegistrationToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get email address update: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if passkeyRegistration.sessionId != session.id {
+		return errorCodeSessionMismatch
+	}
+	if !passkeyRegistration.identityVerified {
+		return errorCodeIdentityNotVerified
+	}
+
+	if passkeyRegistration.passkeyWebauthnCredentialIdDefined {
+		return errorCodePasskeyWebauthnCredentialAlreadySet
+	}
+
+	webauthnCredentialIdValid := verifyPasskeyWebauthnCredentialIdLength(webauthnCredentialId)
+	if !webauthnCredentialIdValid {
+		return errorCodeInvalidWebauthnCredentialId
+	}
+
+	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(webauthnCredentialId)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if !webauthnCredentialIdAvailable {
+		return errorCodeWebauthnCredentialIdAlreadyUsed
+	}
+
+	if len(webauthnAuthenticatorId) != webauthn.AuthenticatorIdSize {
+		return errorCodeInvalidWebauthnAuthenticatorId
+	}
+
+	if signatureAlgorithm == passkeySignatureAlgorithmEd25519 {
+		if len(publicKey) != ed25519.PublicKeySize {
+			return errorCodeInvalidPublicKey
+		}
+	} else if signatureAlgorithm == passkeySignatureAlgorithmECDSAP256SHA256 {
+		ecdsaPublicKey, err := parseECDSASEC1PublicKey(elliptic.P256(), publicKey)
+		if err != nil {
+			return errorCodeInvalidPublicKey
+		}
+		publicKey = elliptic.MarshalCompressed(elliptic.P256(), ecdsaPublicKey.X, ecdsaPublicKey.Y)
+	} else if signatureAlgorithm == passkeySignatureAlgorithmRSASSAPKCS1V15SHA256 {
+		rsaPublicKey, err := x509.ParsePKCS1PublicKey(publicKey)
+		if err != nil {
+			return errorCodeInvalidPublicKey
+		}
+		// TODO: Accept 3072 bits?
+		if rsaPublicKey.Size() != 256 {
+			return errorCodeInvalidPublicKey
+		}
+		if rsaPublicKey.E != 65537 {
+			return errorCodeInvalidPublicKey
+		}
+	} else {
+		return errorCodeInvalidSignatureAlgorithm
+	}
+
+	err = server.setPasskeyRegistrationPasskeyWebauthnCredential(passkeyRegistration.id, webauthnCredentialId, signatureAlgorithm, publicKey, webauthnAuthenticatorId)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to set passkey registration passkey webauthn credential: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	return ""
+}
+
+func (server *serverStruct) setPasskeyRegistrationPasskeyNameAction(requestId string, sessionToken string, passkeyRegistrationToken string, passkeyName string) string {
+	const (
+		errorCodeInvalidSessionToken             = "invalid_session_token"
+		errorCodeInvalidPasskeyRegistrationToken = "invalid_passkey_registration_token"
+		errorCodeSessionMismatch                 = "session_mismatch"
+		errorCodeIdentityNotVerified             = "identity_not_verified"
+		errorCodePasskeyWebauthnCredentialNotSet = "webauthn_credential_not_set"
+		errorCodeInvalidPasskeyName              = "invalid_passkey_name"
+		errorCodePasskeyLimitReached             = "passkey_limit_reached"
+		errorCodeWebauthnCredentialIdAlreadyUsed = "webauthn_credential_id_already_used"
+		errorCodeEmailAddressAlreadyUsed         = "email_address_already_used"
+		errorCodeConflict                        = "conflict"
+		errorCodeUnexpectedError                 = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	passkeyRegistration, err := server.validatePasskeyRegistrationToken(passkeyRegistrationToken)
+	if errors.Is(err, errInvalidPasskeyRegistrationToken) {
+		return errorCodeInvalidPasskeyRegistrationToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get email address update: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if passkeyRegistration.sessionId != session.id {
+		return errorCodeSessionMismatch
+	}
+	if !passkeyRegistration.identityVerified {
+		return errorCodeIdentityNotVerified
+	}
+
+	if !passkeyRegistration.passkeyWebauthnCredentialIdDefined {
+		return errorCodePasskeyWebauthnCredentialNotSet
+	}
+
+	passkeyNameValid := verifyPasskeyNamePattern(passkeyName)
+	if !passkeyNameValid {
+		return errorCodeInvalidPasskeyName
+	}
+
+	if !passkeyRegistration.passkeySignatureAlgorithmDefined {
+		errorMessage := "signup passkey registration public key algorithm not defined"
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if !passkeyRegistration.passkeyWebauthnCredentialIdDefined {
+		errorMessage := "signup passkey registration webauthn credential id not defined"
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	userPasskeyCount, err := server.getUserPasskeyCount(session.userId)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get user passkey count: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if userPasskeyCount > maxPasskeyCountLimit {
+		return errorCodePasskeyLimitReached
+	}
+
+	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(passkeyRegistration.passkeyWebauthnCredentialId)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if !webauthnCredentialIdAvailable {
+		return errorCodeWebauthnCredentialIdAlreadyUsed
+	}
+
+	user, err := server.getUser(session.userId)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get user: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	passkey, err := server.completePasskeyRegistration(passkeyRegistration.id, passkeyName)
+	if errors.Is(err, errItemNotFound) || errors.Is(err, errItemConflict) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to complete passkey registration: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	server.logPasskeyRegistrationCompletedRequestEvent(requestId, session.id, session.userId, passkeyRegistration.id, passkey.id)
+
+	err = server.sendPasskeyRegisteredNotificationEmail(user.emailAddress, passkey.name)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to send passkey registered notification email: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	server.logRequestEmail(requestId, user.emailAddress, emailTypePasskeyRegisteredNotification)
+
+	return ""
+}
+
+func (server *serverStruct) startPasskeyDeletionAction(requestId string, sessionToken string, passkeyId string) (string, string, string) {
+	const (
+		errorCodeInvalidSessionToken = "invalid_session_token"
+		errorCodePasskeyNotFound     = "passkey_not_found"
+		errorCodeConflict            = "conflict"
+		errorCodeUnexpectedError     = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return "", "", errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", "", errorCodeUnexpectedError
+	}
+
+	passkey, err := server.getPasskey(passkeyId)
+	if errors.Is(err, errItemNotFound) {
+		return "", "", errorCodePasskeyNotFound
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get passkey: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", "", errorCodeUnexpectedError
+	}
+
+	passkeyDeletion, passkeyDeletionSecret, identityVerification, identityVerificationSecret, err := server.createPasskeyDeletion(session.id, passkey.id)
+	if errors.Is(err, errItemNotFound) {
+		return "", "", errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to create passkey deletion: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", "", errorCodeUnexpectedError
+	}
+
+	server.logPasskeyDeletionStartedRequestEvent(requestId, session.id, session.userId, passkeyDeletion.id, passkeyDeletion.passkeyId, identityVerification.id)
+
+	passkeyDeletionToken := createSessionToken(passkeyDeletion.id, passkeyDeletionSecret)
+	identityVerificationToken := createSessionToken(identityVerification.id, identityVerificationSecret)
+
+	return passkeyDeletionToken, identityVerificationToken, ""
+}
+
+func (server *serverStruct) cancelPasskeyDeletionAction(requestId string, sessionToken string, passkeyDeletionToken string) string {
+	const (
+		errorCodeInvalidSessionToken         = "invalid_session_token"
+		errorCodeInvalidPasskeyDeletionToken = "invalid_passkey_deletion_token"
+		errorCodeSessionMismatch             = "session_mismatch"
+		errorCodeConflict                    = "conflict"
+		errorCodeUnexpectedError             = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	passkeyDeletion, err := server.validatePasskeyDeletionToken(passkeyDeletionToken)
+	if errors.Is(err, errInvalidPasskeyDeletionToken) {
+		return errorCodeInvalidPasskeyDeletionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get passkey deletion: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	if passkeyDeletion.sessionId != session.id {
+		return errorCodeSessionMismatch
+	}
+
+	err = server.deletePasskeyDeletion(passkeyDeletion.id)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to delete passkey deletion: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	return ""
+}
+
+func (server *serverStruct) confirmPasskeyDeletionAction(requestId string, sessionToken string, passkeyDeletionToken string) string {
+	const (
+		errorCodeInvalidSessionToken         = "invalid_session_token"
+		errorCodeInvalidPasskeyDeletionToken = "invalid_passkey_deletion_token"
+		errorCodeSessionMismatch             = "session_mismatch"
+		errorCodeIdentityNotVerified         = "identity_not_verified"
+		errorCodeConflict                    = "conflict"
+		errorCodeUnexpectedError             = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	passkeyDeletion, err := server.validatePasskeyDeletionToken(passkeyDeletionToken)
+	if errors.Is(err, errInvalidPasskeyDeletionToken) {
+		return errorCodeInvalidPasskeyDeletionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get passkey deletion: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if passkeyDeletion.sessionId != session.id {
+		return errorCodeSessionMismatch
+	}
+	if !passkeyDeletion.identityVerified {
+		return errorCodeIdentityNotVerified
+	}
+
+	user, err := server.getUser(session.userId)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get user: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	passkeyName, err := server.completePasskeyDeletion(passkeyDeletion.id)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to complete passkey deletion: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	server.logPasskeyDeletionCompletedRequestEvent(requestId, session.id, session.userId, passkeyDeletion.id, passkeyDeletion.passkeyId)
+
+	err = server.sendPasskeyDeletedNotificationEmail(user.emailAddress, passkeyName)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to send passkey deleted notification email: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	server.logRequestEmail(requestId, user.emailAddress, emailTypePasskeyDeletedNotification)
+
+	return ""
+}
+
+func (server *serverStruct) startAccountDeletionAction(requestId string, sessionToken string) (string, string, string) {
+	const (
+		errorCodeInvalidSessionToken = "invalid_session_token"
+		errorCodeConflict            = "conflict"
+		errorCodeUnexpectedError     = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return "", "", errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", "", errorCodeUnexpectedError
+	}
+
+	accountDeletion, accountDeletionSecret, identityVerification, identityVerificationSecret, err := server.createAccountDeletion(session.id)
+	if errors.Is(err, errItemNotFound) {
+		return "", "", errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to create account deletion: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return "", "", errorCodeUnexpectedError
+	}
+
+	server.logAccountDeletionStartedRequestEvent(requestId, session.id, session.userId, accountDeletion.id, identityVerification.id)
+
+	accountDeletionToken := createSessionToken(accountDeletion.id, accountDeletionSecret)
+	identityVerificationToken := createSessionToken(identityVerification.id, identityVerificationSecret)
+
+	return accountDeletionToken, identityVerificationToken, ""
+}
+
+func (server *serverStruct) cancelAccountDeletionAction(requestId string, sessionToken string, accountDeletionToken string) string {
+	const (
+		errorCodeInvalidSessionToken         = "invalid_session_token"
+		errorCodeInvalidAccountDeletionToken = "invalid_account_deletion_token"
+		errorCodeSessionMismatch             = "session_mismatch"
+		errorCodeConflict                    = "conflict"
+		errorCodeUnexpectedError             = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	accountDeletion, err := server.validateAccountDeletionToken(accountDeletionToken)
+	if errors.Is(err, errInvalidAccountDeletionToken) {
+		return errorCodeInvalidAccountDeletionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get account deletion: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	if accountDeletion.sessionId != session.id {
+		return errorCodeSessionMismatch
+	}
+
+	err = server.deleteAccountDeletion(accountDeletion.id)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to delete account deletion: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	return ""
+}
+
+func (server *serverStruct) confirmAccountDeletionAction(requestId string, sessionToken string, accountDeletionToken string) string {
+	const (
+		errorCodeInvalidSessionToken         = "invalid_session_token"
+		errorCodeInvalidAccountDeletionToken = "invalid_account_deletion_token"
+		errorCodeSessionMismatch             = "session_mismatch"
+		errorCodeIdentityNotVerified         = "identity_not_verified"
+		errorCodeConflict                    = "conflict"
+		errorCodeUnexpectedError             = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	accountDeletion, err := server.validateAccountDeletionToken(accountDeletionToken)
+	if errors.Is(err, errInvalidAccountDeletionToken) {
+		return errorCodeInvalidAccountDeletionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get account deletion: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if accountDeletion.sessionId != session.id {
+		return errorCodeSessionMismatch
+	}
+	if !accountDeletion.identityVerified {
+		return errorCodeIdentityNotVerified
+	}
+
+	err = server.completeAccountDeletion(accountDeletion.id)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to complete account deletion: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	server.logAccountDeletionCompletedRequestEvent(requestId, session.id, session.userId, accountDeletion.id)
+
+	return ""
+}

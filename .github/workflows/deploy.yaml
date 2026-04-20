@@ -1,0 +1,20 @@
+name: Deploy to Railway
+
+on:
+  workflow_dispatch:
+
+jobs:
+  install-railway:
+    runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI via install.sh
+        run: curl -fsSL https://raw.githubusercontent.com/railwayapp/cli/refs/tags/v4.23.0/install.sh | bash
+
+      - name: Deploy code to Railway
+        run: railway up --ci --service server

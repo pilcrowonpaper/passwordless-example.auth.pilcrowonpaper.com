@@ -1,0 +1,52 @@
+section {
+	padding-bottom: 3rem;
+}
+
+h2 {
+	font-size: 1.5rem;
+	font-weight: bold;
+	margin-bottom: 1rem;
+}
+
+#account-info-user-id {
+	margin-bottom: 0.5rem;
+}
+
+#account-info-email-address {
+	margin-bottom: 1rem;
+}
+
+#passkeys-description {
+	margin-bottom: 1rem;
+}
+
+#passkeys-list {
+	border-radius: 5px;
+	border: 1px solid black;
+	margin-bottom: 1rem;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+#passkeys-list > li {
+	display: flex;
+	place-items: center;
+	place-content: space-between;
+	padding: 1rem;
+	border-bottom: 1px solid black;
+}
+
+#passkeys-list > li:last-child {
+	border-bottom: none;
+}
+
+#sign-out-controls {
+	display: flex;
+	place-items: center;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+
+#delete-account-description {
+	margin-bottom: 1rem;
+}
