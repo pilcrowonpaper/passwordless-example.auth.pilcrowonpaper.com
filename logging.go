@@ -79,9 +79,6 @@ func (server *serverStruct) logRequestEvent(eventName string, requestId string, 
 	if tags.signupId != "" {
 		tagsJSONBuilder.AddString("signup_id", tags.signupId)
 	}
-	if tags.signupPasskeyRegistrationId != "" {
-		tagsJSONBuilder.AddString("signup_passkey_registration_id", tags.signupPasskeyRegistrationId)
-	}
 	if tags.emailCodeSigninId != "" {
 		tagsJSONBuilder.AddString("email_code_signin_id", tags.emailCodeSigninId)
 	}
@@ -120,19 +117,18 @@ func (server *serverStruct) logRequestEvent(eventName string, requestId string, 
 }
 
 type requestEventTagsStruct struct {
-	userId                      string
-	passkeyId                   string
-	sessionId                   string
-	signupId                    string
-	signupPasskeyRegistrationId string
-	emailCodeSigninId           string
-	passkeySigninId             string
-	identityVerificationId      string
-	emailAddressUpdateId        string
-	passkeyRegistrationId       string
-	passkeyDeletionId           string
-	accountDeletionId           string
-	emailAddress                string
+	userId                 string
+	passkeyId              string
+	sessionId              string
+	signupId               string
+	emailCodeSigninId      string
+	passkeySigninId        string
+	identityVerificationId string
+	emailAddressUpdateId   string
+	passkeyRegistrationId  string
+	passkeyDeletionId      string
+	accountDeletionId      string
+	emailAddress           string
 }
 
 func (server *serverStruct) logBackgroundJobRun(runId string, backgroundJobName string) {

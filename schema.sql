@@ -29,16 +29,10 @@ CREATE TABLE signup (
     email_address TEXT NOT NULL,
     email_address_verification_code TEXT NOT NULL,
     email_address_verified INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER NOT NULL
-) STRICT;
-
-CREATE TABLE signup_passkey_registration (
-    id TEXT NOT NULL PRIMARY KEY,
-    signup_id TEXT NOT NULL REFERENCES signup(id) ON DELETE CASCADE,
-    passkey_webauthn_credential_id BLOB NOT NULL,
-    passkey_signature_algorithm TEXT NOT NULL,
-    passkey_public_key BLOB NOT NULL,
-    passkey_webauthn_authenticator_id BLOB NOT NULL,
+    passkey_webauthn_credential_id BLOB,
+    passkey_signature_algorithm TEXT,
+    passkey_public_key BLOB,
+    passkey_webauthn_authenticator_id BLOB,
     created_at INTEGER NOT NULL
 ) STRICT;
 

@@ -135,19 +135,19 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	if actionName == actionCompleteSignup {
+	if actionName == actionCompleteSignupWithoutPasskeyRegistration {
 		signupToken, err := values.GetString("signup_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		sessionToken, errorCode := server.completeSignupAction(requestId, signupToken)
+		sessionToken, errorCode := server.completeSignupWithoutPasskeyRegistrationAction(requestId, signupToken)
 		if errorCode != "" {
-			server.logActionErrorResult(requestId, actionCompleteSignup, errorCode)
+			server.logActionErrorResult(requestId, actionCompleteSignupWithoutPasskeyRegistration, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
-		server.logActionSuccessResult(requestId, actionCompleteSignup)
+		server.logActionSuccessResult(requestId, actionCompleteSignupWithoutPasskeyRegistration)
 
 		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
 		resultValuesJSONBuilder.AddString("session_token", sessionToken)
@@ -156,99 +156,69 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	if actionName == actionStartSignupPasskeyRegistration {
+	if actionName == actionSetSignupPasskeyWebauthnCredential {
 		signupToken, err := values.GetString("signup_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		signatureAlgorithm, err := values.GetString("signature_algorithm")
+		encodedPasskeyWebauthnCredentialId, err := values.GetString("passkey_webauthn_credential_id")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		encodedPublicKey, err := values.GetString("public_key")
+		passkeyWebauthnCredentialId, err := base64.StdEncoding.DecodeString(encodedPasskeyWebauthnCredentialId)
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		publicKey, err := base64.StdEncoding.DecodeString(encodedPublicKey)
+		passkeySignatureAlgorithm, err := values.GetString("passkey_signature_algorithm")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		encodedWebauthnCredentialId, err := values.GetString("webauthn_credential_id")
+		encodedPasskeyPublicKey, err := values.GetString("passkey_public_key")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		webauthnCredentialId, err := base64.StdEncoding.DecodeString(encodedWebauthnCredentialId)
+		passkeyPublicKey, err := base64.StdEncoding.DecodeString(encodedPasskeyPublicKey)
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		encodedWebauthnAuthenticatorId, err := values.GetString("webauthn_authenticator_id")
+		encodedPasskeyWebauthnAuthenticatorId, err := values.GetString("passkey_webauthn_authenticator_id")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		webauthnAuthenticatorId, err := base64.StdEncoding.DecodeString(encodedWebauthnAuthenticatorId)
+		passkeyWebauthnAuthenticatorId, err := base64.StdEncoding.DecodeString(encodedPasskeyWebauthnAuthenticatorId)
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
 
-		signupPasskeyRegistrationId, errorCode := server.startSignupPasskeyRegistrationAction(
+		errorCode := server.setSignupPasskeyWebauthnCredentialAction(
 			requestId,
 			signupToken,
-			webauthnCredentialId,
-			signatureAlgorithm,
-			publicKey,
-			webauthnAuthenticatorId,
+			passkeyWebauthnCredentialId,
+			passkeySignatureAlgorithm,
+			passkeyPublicKey,
+			passkeyWebauthnAuthenticatorId,
 		)
 		if errorCode != "" {
-			server.logActionErrorResult(requestId, actionStartSignupPasskeyRegistration, errorCode)
+			server.logActionErrorResult(requestId, actionSetSignupPasskeyWebauthnCredential, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
-		server.logActionSuccessResult(requestId, actionStartSignupPasskeyRegistration)
+		server.logActionSuccessResult(requestId, actionSetSignupPasskeyWebauthnCredential)
 
-		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
-		resultValuesJSONBuilder.AddString("signup_passkey_registration_id", signupPasskeyRegistrationId)
-		resultValuesJSON := resultValuesJSONBuilder.Done()
-		writeActionSuccessResult(w, requestId, resultValuesJSON)
-		return
-	}
-
-	if actionName == actionDeleteCancelPasskeyRegistration {
-		signupToken, err := values.GetString("signup_token")
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		signupPasskeyRegistrationId, err := values.GetString("signup_passkey_registration_id")
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		errorCode := server.cancelSignupPasskeyRegistrationAction(requestId, signupToken, signupPasskeyRegistrationId)
-		if errorCode != "" {
-			server.logActionErrorResult(requestId, actionDeleteCancelPasskeyRegistration, errorCode)
-			writeActionErrorResult(w, requestId, errorCode)
-			return
-		}
-		server.logActionSuccessResult(requestId, actionDeleteCancelPasskeyRegistration)
 		writeActionSuccessResult(w, requestId, "{}")
 		return
 	}
 
-	if actionName == actionSetSignupPasskeyRegistrationPasskeyName {
+	if actionName == actionSetSignupPasskeyName {
 		signupToken, err := values.GetString("signup_token")
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		signupPasskeyRegistrationId, err := values.GetString("signup_passkey_registration_id")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -258,13 +228,13 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(400)
 			return
 		}
-		sessionToken, errorCode := server.setSignupPasskeyRegistrationPasskeyNameAction(requestId, signupToken, signupPasskeyRegistrationId, passkeyName)
+		sessionToken, errorCode := server.setSignupPasskeyNameAction(requestId, signupToken, passkeyName)
 		if errorCode != "" {
-			server.logActionErrorResult(requestId, actionSetSignupPasskeyRegistrationPasskeyName, errorCode)
+			server.logActionErrorResult(requestId, actionSetSignupPasskeyName, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
-		server.logActionSuccessResult(requestId, actionSetSignupPasskeyRegistrationPasskeyName)
+		server.logActionSuccessResult(requestId, actionSetSignupPasskeyName)
 
 		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
 		resultValuesJSONBuilder.AddString("session_token", sessionToken)
@@ -1253,6 +1223,12 @@ func (server *serverStruct) signUpRegisterPasskeyPageRoute(w http.ResponseWriter
 		return
 	}
 
+	if signup.passkeyWebauthnCredentialIdDefined {
+		w.Header().Set("Location", "/sign-up/register-passkey/set-passkey-name")
+		w.WriteHeader(303)
+		return
+	}
+
 	pageHTML := createSignUpRegisterPasskeyPage(requestId, signupToken, signup)
 
 	writePageHTMLResponse(w, 200, pageHTML)
@@ -1294,33 +1270,18 @@ func (server *serverStruct) signUpRegisterPasskeySetPasskeyNamePageRoute(w http.
 		return
 	}
 
-	signupPasskeyRegistration, err := server.getRequestSignupPasskeyRegistration(r)
-	if errors.Is(err, errItemNotFound) {
-		server.setBlankSignupPasskeyRegistrationIdCookie(w)
-		w.Header().Set("Location", "/sign-up")
-		w.WriteHeader(303)
-		return
-	}
-	if err != nil {
-		errorMessage := fmt.Sprintf("failed to get request signup passkey registration: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
-		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
-		writePageHTMLResponse(w, 500, pageHTML)
-		return
-	}
-	if signupPasskeyRegistration.signupId != signup.id {
-		server.setBlankSignupPasskeyRegistrationIdCookie(w)
+	if !signup.passkeyWebauthnCredentialIdDefined {
 		w.Header().Set("Location", "/sign-up/register-passkey")
 		w.WriteHeader(303)
 		return
 	}
 
 	passkeyNameSuggestion := ""
-	if authenticatorName, ok := server.getWebauthnAuthenticatorName(signupPasskeyRegistration.passkeyWebauthnAuthenticatorId); ok {
+	if authenticatorName, ok := server.getWebauthnAuthenticatorName(signup.passkeyWebauthnAuthenticatorId); ok {
 		passkeyNameSuggestion = authenticatorName
 	}
 
-	pageHTML := createSignUpRegisterPasskeySetPasskeyNamePage(requestId, signupToken, signupPasskeyRegistration.id, passkeyNameSuggestion)
+	pageHTML := createSignUpRegisterPasskeySetPasskeyNamePage(requestId, signupToken, passkeyNameSuggestion)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }

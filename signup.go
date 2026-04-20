@@ -14,13 +14,21 @@ import (
 )
 
 type signupStruct struct {
-	id                           string
-	secretHash                   []byte
-	targetUserId                 string
-	emailAddress                 string
-	emailAddressVerificationCode string
-	emailAddressVerified         bool
-	createdAt                    time.Time
+	id                                    string
+	secretHash                            []byte
+	targetUserId                          string
+	emailAddress                          string
+	emailAddressVerificationCode          string
+	emailAddressVerified                  bool
+	passkeyWebauthnCredentialIdDefined    bool
+	passkeyWebauthnCredentialId           []byte
+	passkeySignatureAlgorithmDefined      bool
+	passkeySignatureAlgorithm             string
+	passkeyPublicKeyDefined               bool
+	passkeyPublicKey                      []byte
+	passkeyWebauthnAuthenticatorIdDefined bool
+	passkeyWebauthnAuthenticatorId        []byte
+	createdAt                             time.Time
 }
 
 func (signup *signupStruct) compareSecretAgainstHash(secret []byte) bool {
@@ -95,7 +103,7 @@ func (server *serverStruct) getSignup(signupId string) (signupStruct, error) {
 	if err != nil {
 		return signupStruct{}, fmt.Errorf("failed to take database read connection: %s", err.Error())
 	}
-	err = sqlitex.Execute(databaseReadConnection, "SELECT secret_hash, target_user_id, email_address, email_address_verification_code, email_address_verified, created_at FROM signup WHERE id = ?", &sqlitex.ExecOptions{
+	err = sqlitex.Execute(databaseReadConnection, "SELECT secret_hash, target_user_id, email_address, email_address_verification_code, email_address_verified, passkey_webauthn_credential_id, passkey_signature_algorithm, passkey_public_key, passkey_webauthn_authenticator_id, created_at FROM signup WHERE id = ?", &sqlitex.ExecOptions{
 		Args: []any{signupId},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			secretHash := make([]byte, stmt.ColumnLen(0))
@@ -109,16 +117,55 @@ func (server *serverStruct) getSignup(signupId string) (signupStruct, error) {
 
 			emailAddressVerified := stmt.ColumnBool(4)
 
-			createdAt := time.Unix(stmt.ColumnInt64(5), 0)
+			passkeyWebauthnCredentialIdDefined := false
+			var passkeyWebauthnCredentialId []byte
+			if !stmt.ColumnIsNull(5) {
+				passkeyWebauthnCredentialIdDefined = true
+				passkeyWebauthnCredentialId = make([]byte, stmt.ColumnLen(5))
+				stmt.ColumnBytes(5, passkeyWebauthnCredentialId)
+			}
+
+			passkeySignatureAlgorithmDefined := false
+			var passkeySignatureAlgorithm string
+			if !stmt.ColumnIsNull(6) {
+				passkeySignatureAlgorithmDefined = true
+				passkeySignatureAlgorithm = stmt.ColumnText(6)
+			}
+
+			passkeyPublicKeyDefined := false
+			var passkeyPublicKey []byte
+			if !stmt.ColumnIsNull(7) {
+				passkeyPublicKeyDefined = true
+				passkeyPublicKey = make([]byte, stmt.ColumnLen(7))
+				stmt.ColumnBytes(7, passkeyPublicKey)
+			}
+
+			passkeyWebauthnAuthenticatorIdDefined := false
+			var passkeyWebauthnAuthenticatorId []byte
+			if !stmt.ColumnIsNull(8) {
+				passkeyWebauthnAuthenticatorIdDefined = true
+				passkeyWebauthnAuthenticatorId = make([]byte, stmt.ColumnLen(8))
+				stmt.ColumnBytes(8, passkeyWebauthnAuthenticatorId)
+			}
+
+			createdAt := time.Unix(stmt.ColumnInt64(9), 0)
 
 			signup := signupStruct{
-				id:                           signupId,
-				secretHash:                   secretHash,
-				targetUserId:                 targetUserId,
-				emailAddress:                 emailAddress,
-				emailAddressVerificationCode: emailAddressVerificationCode,
-				emailAddressVerified:         emailAddressVerified,
-				createdAt:                    createdAt,
+				id:                                    signupId,
+				secretHash:                            secretHash,
+				targetUserId:                          targetUserId,
+				emailAddress:                          emailAddress,
+				emailAddressVerificationCode:          emailAddressVerificationCode,
+				emailAddressVerified:                  emailAddressVerified,
+				passkeyWebauthnCredentialIdDefined:    passkeyWebauthnCredentialIdDefined,
+				passkeyWebauthnCredentialId:           passkeyWebauthnCredentialId,
+				passkeySignatureAlgorithmDefined:      passkeySignatureAlgorithmDefined,
+				passkeySignatureAlgorithm:             passkeySignatureAlgorithm,
+				passkeyPublicKeyDefined:               passkeyPublicKeyDefined,
+				passkeyPublicKey:                      passkeyPublicKey,
+				passkeyWebauthnAuthenticatorIdDefined: passkeyWebauthnAuthenticatorIdDefined,
+				passkeyWebauthnAuthenticatorId:        passkeyWebauthnAuthenticatorId,
+				createdAt:                             createdAt,
 			}
 
 			signups = append(signups, signup)
@@ -209,7 +256,27 @@ func (server *serverStruct) setSignupAsEmailAddressVerified(signupId string) err
 	return nil
 }
 
-func (server *serverStruct) completeSignup(signupId string) (userStruct, sessionStruct, []byte, error) {
+func (server *serverStruct) setSignupPasskeyWebauthnCredential(signupId string, passkeyWebauthnCredentialId []byte, passkeySignatureAlgorithm string, passkeyPublicKey []byte, passkeyWebauthnAuthenticatorId []byte) error {
+	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to take database write connection: %s", err.Error())
+	}
+	err = sqlitex.Execute(databaseWriteConnection, "UPDATE signup SET passkey_webauthn_credential_id = ?, passkey_signature_algorithm = ?, passkey_public_key = ?, passkey_webauthn_authenticator_id = ? WHERE id = ? AND passkey_webauthn_credential_id IS NULL", &sqlitex.ExecOptions{
+		Args: []any{passkeyWebauthnCredentialId, passkeySignatureAlgorithm, passkeyPublicKey, passkeyWebauthnAuthenticatorId, signupId},
+	})
+	if err != nil {
+		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
+		return fmt.Errorf("failed to update signup table: %s", err.Error())
+	}
+	affectedCount := databaseWriteConnection.Changes()
+	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
+	if affectedCount < 1 {
+		return errItemNotFound
+	}
+	return nil
+}
+
+func (server *serverStruct) completeSignupWithoutPasskeyRegistration(signupId string) (userStruct, sessionStruct, []byte, error) {
 	nowSecondPrecision := getCurrentTimeSecondPrecision()
 
 	sessionId := generateItemId()
@@ -228,20 +295,27 @@ func (server *serverStruct) completeSignup(signupId string) (userStruct, session
 	}
 
 	users := []userStruct{}
-	err = sqlitex.Execute(databaseWriteConnection, "INSERT INTO user (id, email_address, created_at) SELECT signup.target_user_id, signup.email_address, ? FROM signup WHERE id = ? AND email_address_verified = 1 RETURNING id, email_address", &sqlitex.ExecOptions{
-		Args: []any{nowSecondPrecision.Unix(), signupId},
-		ResultFunc: func(stmt *sqlite.Stmt) error {
-			id := stmt.ColumnText(0)
-			emailAddress := stmt.ColumnText(1)
-			user := userStruct{
-				id:           id,
-				emailAddress: emailAddress,
-				createdAt:    nowSecondPrecision,
-			}
-			users = append(users, user)
-			return nil
-		},
-	})
+	err = sqlitex.Execute(
+		databaseWriteConnection,
+		`INSERT INTO user (id, email_address, created_at)
+SELECT signup.target_user_id, signup.email_address, ? FROM signup
+WHERE id = ?
+AND email_address_verified = 1
+AND passkey_webauthn_credential_id IS NULL
+RETURNING id, email_address`, &sqlitex.ExecOptions{
+			Args: []any{nowSecondPrecision.Unix(), signupId},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				id := stmt.ColumnText(0)
+				emailAddress := stmt.ColumnText(1)
+				user := userStruct{
+					id:           id,
+					emailAddress: emailAddress,
+					createdAt:    nowSecondPrecision,
+				}
+				users = append(users, user)
+				return nil
+			},
+		})
 	if err != nil {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
@@ -311,7 +385,7 @@ func (server *serverStruct) completeSignup(signupId string) (userStruct, session
 	return user, session, sessionSecret, nil
 }
 
-func (server *serverStruct) completeSignupWithPasskeyRegistration(signupId string, signupPasskeyRegistrationId string, passkeyName string) (userStruct, passkeyStruct, sessionStruct, []byte, error) {
+func (server *serverStruct) completeSignupWithPasskeyRegistration(signupId string, passkeyName string) (userStruct, passkeyStruct, sessionStruct, []byte, error) {
 	nowSecondPrecision := getCurrentTimeSecondPrecision()
 
 	passkeyId := generateItemId()
@@ -332,21 +406,29 @@ func (server *serverStruct) completeSignupWithPasskeyRegistration(signupId strin
 	}
 
 	users := []userStruct{}
-	err = sqlitex.Execute(databaseWriteConnection, "INSERT INTO user (id, email_address, created_at) SELECT signup.target_user_id, signup.email_address, ? FROM signup WHERE id = ? AND email_address_verified = 1 RETURNING id, email_address", &sqlitex.ExecOptions{
-		Args: []any{nowSecondPrecision.Unix(), signupId},
-		ResultFunc: func(stmt *sqlite.Stmt) error {
-			id := stmt.ColumnText(0)
-			emailAddress := stmt.ColumnText(1)
+	err = sqlitex.Execute(
+		databaseWriteConnection,
+		`INSERT INTO user (id, email_address, created_at)
+SELECT signup.target_user_id, signup.email_address, ? FROM signup
+WHERE id = ?
+AND email_address_verified = 1
+AND passkey_webauthn_credential_id IS NOT NULL
+RETURNING id, email_address`,
+		&sqlitex.ExecOptions{
+			Args: []any{nowSecondPrecision.Unix(), signupId},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				id := stmt.ColumnText(0)
+				emailAddress := stmt.ColumnText(1)
 
-			user := userStruct{
-				id:           id,
-				emailAddress: emailAddress,
-				createdAt:    nowSecondPrecision,
-			}
-			users = append(users, user)
-			return nil
-		},
-	})
+				user := userStruct{
+					id:           id,
+					emailAddress: emailAddress,
+					createdAt:    nowSecondPrecision,
+				}
+				users = append(users, user)
+				return nil
+			},
+		})
 	if err != nil {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
@@ -371,39 +453,42 @@ func (server *serverStruct) completeSignupWithPasskeyRegistration(signupId strin
 	user := users[0]
 
 	passkeys := []passkeyStruct{}
-	err = sqlitex.Execute(databaseWriteConnection, `INSERT INTO passkey (id, user_id, webauthn_credential_id, signature_algorithm, public_key, webauthn_authenticator_id, name, created_at)
-SELECT ?, ?, passkey_webauthn_credential_id, passkey_signature_algorithm, passkey_public_key, passkey_webauthn_authenticator_id, ?, ? FROM signup_passkey_registration
+	err = sqlitex.Execute(
+		databaseWriteConnection,
+		`INSERT INTO passkey (id, user_id, webauthn_credential_id, signature_algorithm, public_key, webauthn_authenticator_id, name, created_at)
+SELECT ?, ?, passkey_webauthn_credential_id, passkey_signature_algorithm, passkey_public_key, passkey_webauthn_authenticator_id, ?, ? FROM signup
 WHERE id = ?
-RETURNING webauthn_credential_id, signature_algorithm, public_key, webauthn_authenticator_id, name`, &sqlitex.ExecOptions{
-		Args: []any{passkeyId, user.id, passkeyName, nowSecondPrecision.Unix(), signupPasskeyRegistrationId},
-		ResultFunc: func(stmt *sqlite.Stmt) error {
-			webauthnCredentialId := make([]byte, stmt.ColumnLen(0))
-			stmt.ColumnBytes(0, webauthnCredentialId)
+RETURNING webauthn_credential_id, signature_algorithm, public_key, webauthn_authenticator_id, name`,
+		&sqlitex.ExecOptions{
+			Args: []any{passkeyId, user.id, passkeyName, nowSecondPrecision.Unix(), signupId},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				webauthnCredentialId := make([]byte, stmt.ColumnLen(0))
+				stmt.ColumnBytes(0, webauthnCredentialId)
 
-			signatureAlgorithm := stmt.ColumnText(1)
+				signatureAlgorithm := stmt.ColumnText(1)
 
-			publicKey := make([]byte, stmt.ColumnLen(2))
-			stmt.ColumnBytes(2, publicKey)
+				publicKey := make([]byte, stmt.ColumnLen(2))
+				stmt.ColumnBytes(2, publicKey)
 
-			webauthnAuthenticatorId := make([]byte, stmt.ColumnLen(3))
-			stmt.ColumnBytes(3, webauthnAuthenticatorId)
+				webauthnAuthenticatorId := make([]byte, stmt.ColumnLen(3))
+				stmt.ColumnBytes(3, webauthnAuthenticatorId)
 
-			name := stmt.ColumnText(4)
+				name := stmt.ColumnText(4)
 
-			passkey := passkeyStruct{
-				id:                      passkeyId,
-				userId:                  user.id,
-				webauthnCredentialId:    webauthnCredentialId,
-				signatureAlgorithm:      signatureAlgorithm,
-				publicKey:               publicKey,
-				webauthnAuthenticatorId: webauthnAuthenticatorId,
-				name:                    name,
-				createdAt:               nowSecondPrecision,
-			}
-			passkeys = append(passkeys, passkey)
-			return nil
-		},
-	})
+				passkey := passkeyStruct{
+					id:                      passkeyId,
+					userId:                  user.id,
+					webauthnCredentialId:    webauthnCredentialId,
+					signatureAlgorithm:      signatureAlgorithm,
+					publicKey:               publicKey,
+					webauthnAuthenticatorId: webauthnAuthenticatorId,
+					name:                    name,
+					createdAt:               nowSecondPrecision,
+				}
+				passkeys = append(passkeys, passkey)
+				return nil
+			},
+		})
 	if err != nil {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)

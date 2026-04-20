@@ -21,11 +21,9 @@ const (
 	actionCancelSignup                             = "cancel_signup"
 	actionSendSignupEmailAddressVerificationCode   = "send_signup_email_address_verification_code"
 	actionVerifySignupEmailAddressVerificationCode = "verify_signup_email_address_verification_code"
-	actionCompleteSignup                           = "complete_signup"
-
-	actionStartSignupPasskeyRegistration          = "start_signup_passkey_registration"
-	actionDeleteCancelPasskeyRegistration         = "cancel_signup_passkey_registration"
-	actionSetSignupPasskeyRegistrationPasskeyName = "set_signup_passkey_registration_passkey_name"
+	actionCompleteSignupWithoutPasskeyRegistration = "complete_signup_without_passkey_registration"
+	actionSetSignupPasskeyWebauthnCredential       = "set_signup_passkey_webauthn_credential"
+	actionSetSignupPasskeyName                     = "set_signup_passkey_name"
 
 	actionStartEmailCodeSignin           = "start_email_code_signin"
 	actionCancelEmailCodeSignin          = "cancel_email_code_signin"
@@ -230,7 +228,7 @@ func (server *serverStruct) verifySignupEmailAddressVerificationCodeAction(reque
 	return ""
 }
 
-func (server *serverStruct) completeSignupAction(requestId string, signupToken string) (string, string) {
+func (server *serverStruct) completeSignupWithoutPasskeyRegistrationAction(requestId string, signupToken string) (string, string) {
 	const (
 		errorCodeInvalidSignupToken      = "invalid_signup_token"
 		errorCodeEmailAddressNotVerified = "email_address_not_verified"
@@ -262,7 +260,7 @@ func (server *serverStruct) completeSignupAction(requestId string, signupToken s
 		return "", errorCodeEmailAddressAlreadyUsed
 	}
 
-	user, session, sessionSecret, err := server.completeSignup(signup.id)
+	user, session, sessionSecret, err := server.completeSignupWithoutPasskeyRegistration(signup.id)
 	if errors.Is(err, errItemNotFound) || errors.Is(err, errItemConflict) {
 		return "", errorCodeInvalidSignupToken
 	}
@@ -272,22 +270,133 @@ func (server *serverStruct) completeSignupAction(requestId string, signupToken s
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logSignupCompletedRequestEvent(requestId, signup.id, signup.emailAddress, user.id, session.id)
+	server.logSignupCompletedWithoutPasskeyRegistrationRequestEvent(requestId, signup.id, signup.emailAddress, user.id, session.id)
 
 	sessionToken := createSessionToken(session.id, sessionSecret)
 
 	return sessionToken, ""
 }
 
-func (server *serverStruct) startSignupPasskeyRegistrationAction(requestId string, signupToken string, webauthnCredentialId []byte, signatureAlgorithm string, publicKey []byte, webauthnAuthenticatorId []byte) (string, string) {
+func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
+	requestId string,
+	signupToken string,
+	passkeyWebauthnCredentialId []byte,
+	passkeySignatureAlgorithm string,
+	passkeyPublicKey []byte,
+	passkeyWebauthnAuthenticatorId []byte,
+) string {
+	const (
+		errorCodeInvalidSignupToken                  = "invalid_signup_token"
+		errorCodeEmailAddressNotVerified             = "email_address_not_verified"
+		errorCodePasskeyWebauthnCredentialAlreadySet = "passkey_webauthn_credential_already_set"
+		errorCodeInvalidSignatureAlgorithm           = "invalid_signature_algorithm"
+		errorCodeInvalidPublicKey                    = "invalid_public_key"
+		errorCodeInvalidWebauthnCredentialId         = "invalid_webauthn_credential_id"
+		errorCodeWebauthnCredentialIdAlreadyUsed     = "webauthn_credential_id_already_used"
+		errorCodeInvalidWebauthnAuthenticatorId      = "invalid_webauthn_authenticator_id"
+		errorCodeConflict                            = "conflict"
+		errorCodeUnexpectedError                     = "unexpected_error"
+	)
+
+	signup, err := server.validateSignupToken(signupToken)
+	if errors.Is(err, errInvalidSignupToken) {
+		return errorCodeInvalidSignupToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	if !signup.emailAddressVerified {
+		return errorCodeEmailAddressNotVerified
+	}
+	if signup.passkeyWebauthnCredentialIdDefined {
+		return errorCodePasskeyWebauthnCredentialAlreadySet
+	}
+
+	if signup.passkeySignatureAlgorithmDefined {
+		errorMessage := "signup passkey signature algorithm defined"
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if signup.passkeyPublicKeyDefined {
+		errorMessage := "signup passkey public key defined"
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if signup.passkeyWebauthnAuthenticatorIdDefined {
+		errorMessage := "signup passkey webauthn authenticator id defined"
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	webauthnCredentialIdValid := verifyPasskeyWebauthnCredentialIdLength(passkeyWebauthnCredentialId)
+	if !webauthnCredentialIdValid {
+		return errorCodeInvalidWebauthnCredentialId
+	}
+
+	if len(passkeyWebauthnAuthenticatorId) != webauthn.AuthenticatorIdSize {
+		return errorCodeInvalidWebauthnAuthenticatorId
+	}
+
+	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(passkeyWebauthnCredentialId)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+	if !webauthnCredentialIdAvailable {
+		return errorCodeWebauthnCredentialIdAlreadyUsed
+	}
+
+	if passkeySignatureAlgorithm == passkeySignatureAlgorithmEd25519 {
+		if len(passkeyPublicKey) != ed25519.PublicKeySize {
+			return errorCodeInvalidPublicKey
+		}
+	} else if passkeySignatureAlgorithm == passkeySignatureAlgorithmECDSAP256SHA256 {
+		ecdsaPublicKey, err := parseECDSASEC1PublicKey(elliptic.P256(), passkeyPublicKey)
+		if err != nil {
+			return errorCodeInvalidPublicKey
+		}
+		passkeyPublicKey = elliptic.MarshalCompressed(elliptic.P256(), ecdsaPublicKey.X, ecdsaPublicKey.Y)
+	} else if passkeySignatureAlgorithm == passkeySignatureAlgorithmRSASSAPKCS1V15SHA256 {
+		rsaPublicKey, err := x509.ParsePKCS1PublicKey(passkeyPublicKey)
+		if err != nil {
+			return errorCodeInvalidPublicKey
+		}
+		// TODO: Accept 3072 bits?
+		if rsaPublicKey.Size() != 256 {
+			return errorCodeInvalidPublicKey
+		}
+		if rsaPublicKey.E != 65537 {
+			return errorCodeInvalidPublicKey
+		}
+	} else {
+		return errorCodeInvalidSignatureAlgorithm
+	}
+
+	err = server.setSignupPasskeyWebauthnCredential(signup.id, passkeyWebauthnCredentialId, passkeySignatureAlgorithm, passkeyPublicKey, passkeyWebauthnAuthenticatorId)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to create signup passkey registration: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	return ""
+}
+
+func (server *serverStruct) setSignupPasskeyNameAction(requestId string, signupToken string, passkeyName string) (string, string) {
 	const (
 		errorCodeInvalidSignupToken              = "invalid_signup_token"
 		errorCodeEmailAddressNotVerified         = "email_address_not_verified"
-		errorCodeInvalidSignatureAlgorithm       = "invalid_signature_algorithm"
-		errorCodeInvalidPublicKey                = "invalid_public_key"
-		errorCodeInvalidWebauthnCredentialId     = "invalid_webauthn_credential_id"
+		errorCodePasskeyWebauthnCredentialNotSet = "passkey_webauthn_credential_not_set"
+		errorCodeInvalidPasskeyName              = "invalid_passkey_name"
 		errorCodeWebauthnCredentialIdAlreadyUsed = "webauthn_credential_id_already_used"
-		errorCodeInvalidWebauthnAuthenticatorId  = "invalid_webauthn_authenticator_id"
+		errorCodeEmailAddressAlreadyUsed         = "email_address_already_used"
 		errorCodeConflict                        = "conflict"
 		errorCodeUnexpectedError                 = "unexpected_error"
 	)
@@ -305,144 +414,24 @@ func (server *serverStruct) startSignupPasskeyRegistrationAction(requestId strin
 	if !signup.emailAddressVerified {
 		return "", errorCodeEmailAddressNotVerified
 	}
-
-	webauthnCredentialIdValid := verifyPasskeyWebauthnCredentialIdLength(webauthnCredentialId)
-	if !webauthnCredentialIdValid {
-		return "", errorCodeInvalidWebauthnCredentialId
+	if !signup.passkeyWebauthnCredentialIdDefined {
+		return "", errorCodePasskeyWebauthnCredentialNotSet
 	}
 
-	if len(webauthnAuthenticatorId) != webauthn.AuthenticatorIdSize {
-		return "", errorCodeInvalidWebauthnAuthenticatorId
-	}
-
-	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(webauthnCredentialId)
-	if err != nil {
-		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
+	if !signup.passkeySignatureAlgorithmDefined {
+		errorMessage := "signup passkey signature algorithm not defined"
 		server.logActionError(requestId, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
-	if !webauthnCredentialIdAvailable {
-		return "", errorCodeWebauthnCredentialIdAlreadyUsed
-	}
-
-	if signatureAlgorithm == passkeySignatureAlgorithmEd25519 {
-		if len(publicKey) != ed25519.PublicKeySize {
-			return "", errorCodeInvalidPublicKey
-		}
-	} else if signatureAlgorithm == passkeySignatureAlgorithmECDSAP256SHA256 {
-		ecdsaPublicKey, err := parseECDSASEC1PublicKey(elliptic.P256(), publicKey)
-		if err != nil {
-			return "", errorCodeInvalidPublicKey
-		}
-		publicKey = elliptic.MarshalCompressed(elliptic.P256(), ecdsaPublicKey.X, ecdsaPublicKey.Y)
-	} else if signatureAlgorithm == passkeySignatureAlgorithmRSASSAPKCS1V15SHA256 {
-		rsaPublicKey, err := x509.ParsePKCS1PublicKey(publicKey)
-		if err != nil {
-			return "", errorCodeInvalidPublicKey
-		}
-		// TODO: Accept 3072 bits?
-		if rsaPublicKey.Size() != 256 {
-			return "", errorCodeInvalidPublicKey
-		}
-		if rsaPublicKey.E != 65537 {
-			return "", errorCodeInvalidPublicKey
-		}
-	} else {
-		return "", errorCodeInvalidSignatureAlgorithm
-	}
-
-	signupPasskeyRegistration, err := server.createSignupPasskeyRegistration(signup.id, signatureAlgorithm, publicKey, webauthnCredentialId, webauthnAuthenticatorId)
-	if err != nil {
-		errorMessage := fmt.Sprintf("failed to create signup passkey registration: %s", err.Error())
+	if !signup.passkeyPublicKeyDefined {
+		errorMessage := "signup passkey public key not defined"
 		server.logActionError(requestId, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
-
-	server.logSignupPasskeyRegistrationStartedRequestEvent(requestId, signup.id, signup.emailAddress, signupPasskeyRegistration.id)
-
-	return signupPasskeyRegistration.id, ""
-}
-
-func (server *serverStruct) cancelSignupPasskeyRegistrationAction(requestId string, signupToken string, signupPasskeyRegistrationId string) string {
-	const (
-		errorCodeInvalidSignupToken                = "invalid_signup_token"
-		errorCodeEmailAddressNotVerified           = "email_address_not_verified"
-		errorCodeSignupPasskeyRegistrationNotFound = "signup_passkey_registration_not_found"
-		errorCodeSignupMismatch                    = "signup_mismatch"
-		errorCodeConflict                          = "conflict"
-		errorCodeUnexpectedError                   = "unexpected_error"
-	)
-
-	signup, err := server.validateSignupToken(signupToken)
-	if errors.Is(err, errInvalidSignupToken) {
-		return errorCodeInvalidSignupToken
-	}
-	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
-		return errorCodeUnexpectedError
-	}
-
-	if !signup.emailAddressVerified {
-		return errorCodeEmailAddressNotVerified
-	}
-
-	signupPasskeyRegistration, err := server.getSignupPasskeyRegistration(signupPasskeyRegistrationId)
-	if errors.Is(err, errItemNotFound) {
-		return errorCodeSignupPasskeyRegistrationNotFound
-	}
-
-	if signupPasskeyRegistration.signupId != signup.id {
-		return errorCodeSignupMismatch
-	}
-
-	err = server.deleteSignupPasskeyRegistration(signupPasskeyRegistration.id)
-	if errors.Is(err, errItemNotFound) {
-		return errorCodeConflict
-	}
-	if err != nil {
-		errorMessage := fmt.Sprintf("failed to delete signup passkey registration: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
-		return errorCodeUnexpectedError
-	}
-
-	return ""
-}
-
-func (server *serverStruct) setSignupPasskeyRegistrationPasskeyNameAction(requestId string, signupToken string, signupPasskeyRegistrationId string, passkeyName string) (string, string) {
-	const (
-		errorCodeInvalidSignupToken                = "invalid_signup_token"
-		errorCodeEmailAddressNotVerified           = "email_address_not_verified"
-		errorCodeSignupPasskeyRegistrationNotFound = "signup_passkey_registration_not_found"
-		errorCodeSignupMismatch                    = "signup_mismatch"
-		errorCodeInvalidPasskeyName                = "invalid_passkey_name"
-		errorCodeWebauthnCredentialIdAlreadyUsed   = "webauthn_credential_id_already_used"
-		errorCodeEmailAddressAlreadyUsed           = "email_address_already_used"
-		errorCodeConflict                          = "conflict"
-		errorCodeUnexpectedError                   = "unexpected_error"
-	)
-
-	signup, err := server.validateSignupToken(signupToken)
-	if errors.Is(err, errInvalidSignupToken) {
-		return "", errorCodeInvalidSignupToken
-	}
-	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
+	if !signup.passkeyWebauthnAuthenticatorIdDefined {
+		errorMessage := "signup passkey webauthn authenticator id not defined"
 		server.logActionError(requestId, errorMessage)
 		return "", errorCodeUnexpectedError
-	}
-
-	if !signup.emailAddressVerified {
-		return "", errorCodeEmailAddressNotVerified
-	}
-
-	signupPasskeyRegistration, err := server.getSignupPasskeyRegistration(signupPasskeyRegistrationId)
-	if errors.Is(err, errItemNotFound) {
-		return "", errorCodeSignupPasskeyRegistrationNotFound
-	}
-
-	if signupPasskeyRegistration.signupId != signup.id {
-		return "", errorCodeSignupMismatch
 	}
 
 	passkeyNameValid := verifyPasskeyNamePattern(passkeyName)
@@ -460,7 +449,7 @@ func (server *serverStruct) setSignupPasskeyRegistrationPasskeyNameAction(reques
 		return "", errorCodeEmailAddressAlreadyUsed
 	}
 
-	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(signupPasskeyRegistration.passkeyWebauthnCredentialId)
+	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(signup.passkeyWebauthnCredentialId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
 		server.logActionError(requestId, errorMessage)
@@ -470,7 +459,7 @@ func (server *serverStruct) setSignupPasskeyRegistrationPasskeyNameAction(reques
 		return "", errorCodeWebauthnCredentialIdAlreadyUsed
 	}
 
-	user, passkey, session, sessionSecret, err := server.completeSignupWithPasskeyRegistration(signup.id, signupPasskeyRegistration.id, passkeyName)
+	user, passkey, session, sessionSecret, err := server.completeSignupWithPasskeyRegistration(signup.id, passkeyName)
 	if errors.Is(err, errItemNotFound) || errors.Is(err, errItemConflict) {
 		return "", errorCodeConflict
 	}
@@ -480,7 +469,7 @@ func (server *serverStruct) setSignupPasskeyRegistrationPasskeyNameAction(reques
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logSignupCompletedWithPasskeyRegistrationRequestEvent(requestId, signup.id, signup.emailAddress, signupPasskeyRegistration.id, user.id, passkey.id, session.id)
+	server.logSignupCompletedWithPasskeyRegistrationRequestEvent(requestId, signup.id, signup.emailAddress, user.id, passkey.id, session.id)
 
 	sessionToken := createSessionToken(session.id, sessionSecret)
 

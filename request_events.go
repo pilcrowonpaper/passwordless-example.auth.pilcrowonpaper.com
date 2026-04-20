@@ -1,12 +1,11 @@
 package main
 
 const (
-	requestEventSignupStarted                          = "signup_started"
-	requestEventSignupEmailAddressVerified             = "signup_email_address_verified"
-	requestEventSignupEmailAddressVerificationFailed   = "signup_email_address_verification_failed"
-	requestEventSignupPasskeyRegistrationStarted       = "signup_passkey_registration_started"
-	requestEventSignupCompleted                        = "signup_completed"
-	requestEventSignupCompletedWithPasskeyRegistration = "signup_completed_with_passkey_registration"
+	requestEventSignupStarted                             = "signup_started"
+	requestEventSignupEmailAddressVerified                = "signup_email_address_verified"
+	requestEventSignupEmailAddressVerificationFailed      = "signup_email_address_verification_failed"
+	requestEventSignupCompletedWithoutPasskeyRegistration = "signup_completed_without_passkey_registration"
+	requestEventSignupCompletedWithPasskeyRegistration    = "signup_completed_with_passkey_registration"
 
 	requestEventEmailCodeSigninStarted                     = "email_code_signin_started"
 	requestEventEmailCodeSigninCompleted                   = "email_code_signin_completed"
@@ -63,17 +62,7 @@ func (server *serverStruct) logSignupEmailAddressVerificationFailedRequestEvent(
 	server.logRequestEvent(requestEventSignupEmailAddressVerificationFailed, requestId, tags)
 }
 
-func (server *serverStruct) logSignupPasskeyRegistrationStartedRequestEvent(requestId string, signupId string, emailAddress string, signupPasskeyRegistrationId string) {
-	tags := requestEventTagsStruct{
-		signupId:                    signupId,
-		emailAddress:                emailAddress,
-		signupPasskeyRegistrationId: signupPasskeyRegistrationId,
-	}
-
-	server.logRequestEvent(requestEventSignupPasskeyRegistrationStarted, requestId, tags)
-}
-
-func (server *serverStruct) logSignupCompletedRequestEvent(requestId string, signupId string, emailAddress string, userId string, sessionId string) {
+func (server *serverStruct) logSignupCompletedWithoutPasskeyRegistrationRequestEvent(requestId string, signupId string, emailAddress string, userId string, sessionId string) {
 	tags := requestEventTagsStruct{
 		signupId:     signupId,
 		emailAddress: emailAddress,
@@ -81,17 +70,16 @@ func (server *serverStruct) logSignupCompletedRequestEvent(requestId string, sig
 		sessionId:    sessionId,
 	}
 
-	server.logRequestEvent(requestEventSignupCompleted, requestId, tags)
+	server.logRequestEvent(requestEventSignupCompletedWithoutPasskeyRegistration, requestId, tags)
 }
 
-func (server *serverStruct) logSignupCompletedWithPasskeyRegistrationRequestEvent(requestId string, signupId string, emailAddress string, signupPasskeyRegistrationId string, userId string, passkeyId string, sessionId string) {
+func (server *serverStruct) logSignupCompletedWithPasskeyRegistrationRequestEvent(requestId string, signupId string, emailAddress string, userId string, passkeyId string, sessionId string) {
 	tags := requestEventTagsStruct{
-		signupId:                    signupId,
-		emailAddress:                emailAddress,
-		signupPasskeyRegistrationId: signupPasskeyRegistrationId,
-		userId:                      userId,
-		passkeyId:                   passkeyId,
-		sessionId:                   sessionId,
+		signupId:     signupId,
+		emailAddress: emailAddress,
+		userId:       userId,
+		passkeyId:    passkeyId,
+		sessionId:    sessionId,
 	}
 
 	server.logRequestEvent(requestEventSignupCompletedWithPasskeyRegistration, requestId, tags)

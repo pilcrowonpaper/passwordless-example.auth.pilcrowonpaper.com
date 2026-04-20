@@ -66,13 +66,13 @@ createPasskeyButtonElement.addEventListener("click", async () => {
     
 	const actionValuesJSONObject = {
 		signup_token: signupToken,
-        webauthn_credential_id: parseAuthenticatorDataResult.credentialId.toBase64(),
-        signature_algorithm: parseAuthenticatorDataResult.signatureAlgorithm,
-        public_key: parseAuthenticatorDataResult.publicKey.toBase64(),
-        webauthn_authenticator_id: parseAuthenticatorDataResult.aaguid.toBase64(),
+        passkey_webauthn_credential_id: parseAuthenticatorDataResult.credentialId.toBase64(),
+        passkey_signature_algorithm: parseAuthenticatorDataResult.signatureAlgorithm,
+        passkey_public_key: parseAuthenticatorDataResult.publicKey.toBase64(),
+        passkey_webauthn_authenticator_id: parseAuthenticatorDataResult.aaguid.toBase64(),
 	};
 	const requestBodyJSONObject = {
-		action: "start_signup_passkey_registration",
+		action: "set_signup_passkey_webauthn_credential",
 		values: actionValuesJSONObject,
 	};
 	const requestBody = JSON.stringify(requestBodyJSONObject);
@@ -83,7 +83,6 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 	});
 	request.headers.set("Content-Type", "application/json");
 
-    let signupPasskeyRegistrationId;
 	try {
 		const response = await fetch(request);
 		if (!response.ok) {
@@ -110,8 +109,6 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 			}
 			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
 		}
-
-        signupPasskeyRegistrationId = resultJSONObject.values.signup_passkey_registration_id;
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -119,12 +116,7 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 		return;
 	}
 
-    if (window.location.protocol === "https:") {
-		document.cookie = `signup_passkey_registration_id=${signupPasskeyRegistrationId}; Max-Age=3600; SameSite=Lax; Path=/; Secure`;
-	} else {
-		document.cookie = `signup_passkey_registration_id=${signupPasskeyRegistrationId}; Max-Age=3600; SameSite=Lax; Path=/`;
-	}
-	clientStateEventChannel.postMessage("signup_passkey_registration_updated");
+	clientStateEventChannel.postMessage("signup_updated");
 
 	window.location.href = "/sign-up/register-passkey/set-passkey-name";
 });
@@ -137,7 +129,7 @@ skipButtonElement.addEventListener("click", async () => {
 		signup_token: signupToken,
 	};
 	const requestBodyJSONObject = {
-		action: "complete_signup",
+		action: "complete_signup_without_passkey_registration",
 		values: actionValuesJSONObject,
 	};
 	const requestBody = JSON.stringify(requestBodyJSONObject);
@@ -160,10 +152,8 @@ skipButtonElement.addEventListener("click", async () => {
 			if (resultJSONObject.error_code === "invalid_signup_token") {
 				if (window.location.protocol === "https:") {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-                    document.cookie = `signup_passkey_registration_id=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
-                    document.cookie = `signup_passkey_registration_id=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
 				clientStateEventChannel.postMessage("signup_updated");
 
