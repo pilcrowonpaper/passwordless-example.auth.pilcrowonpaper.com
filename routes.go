@@ -1315,7 +1315,12 @@ func (server *serverStruct) signUpRegisterPasskeySetPasskeyNamePageRoute(w http.
 		return
 	}
 
-	pageHTML := createSignUpRegisterPasskeySetPasskeyNamePage(requestId, signupToken, signupPasskeyRegistration.id)
+	passkeyNameSuggestion := ""
+	if authenticatorName, ok := server.getWebauthnAuthenticatorName(signupPasskeyRegistration.passkeyWebauthnAuthenticatorId); ok {
+		passkeyNameSuggestion = authenticatorName
+	}
+
+	pageHTML := createSignUpRegisterPasskeySetPasskeyNamePage(requestId, signupToken, signupPasskeyRegistration.id, passkeyNameSuggestion)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
@@ -1772,7 +1777,10 @@ func (server *serverStruct) registerPasskeySetPasskeyNamePageRoute(w http.Respon
 		return
 	}
 
-	passkeyNameSuggestion, _ := server.getWebauthnAuthenticatorName(passkeyRegistration.passkeyWebauthnAuthenticatorId)
+	passkeyNameSuggestion := ""
+	if authenticatorName, ok := server.getWebauthnAuthenticatorName(passkeyRegistration.passkeyWebauthnAuthenticatorId); ok {
+		passkeyNameSuggestion = authenticatorName
+	}
 
 	pageHTML := createRegisterPasskeySetPasskeyNamePageHTML(requestId, sessionToken, passkeyRegistrationToken, passkeyNameSuggestion)
 

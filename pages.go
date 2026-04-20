@@ -174,16 +174,17 @@ var signUpRegisterPasskeySetPasskeyNameScript string
 //go:embed frontend_assets/sign_up_register_passkey_set_passkey_name.css
 var signUpRegisterPasskeySetPasskeyNameStylesheet string
 
-func createSignUpRegisterPasskeySetPasskeyNamePage(requestId string, signupToken string, signupPasskeyRegistrationId string) string {
+func createSignUpRegisterPasskeySetPasskeyNamePage(requestId string, signupToken string, signupPasskeyRegistrationId string, passkeyNameSuggestion string) string {
 	title := "Name your passkey | Passwordless auth example"
 
-	bodyHTML := `<h1>Name your passkey</h1>
+	template := `<h1>Name your passkey</h1>
 <p>Give your passkey a name so you can easily recognize and manage it later.</p>
 <form id="set-passkey-name-form">
 	<label for="set-passkey-name-form-name-input">Passkey name (Standard characters except double quotes)</label>
-	<input id="set-passkey-name-form-name-input" name="passkey_name" required />
+	<input id="set-passkey-name-form-name-input" name="passkey_name" required value="%s" />
 	<button id="set-passkey-name-form-submit-button">Complete</button>
 </form>`
+	bodyHTML := fmt.Sprintf(template, html.EscapeString(passkeyNameSuggestion))
 
 	dataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
 	dataJSONBuilder.AddString("signup_token", signupToken)
