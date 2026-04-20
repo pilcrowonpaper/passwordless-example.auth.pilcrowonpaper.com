@@ -90,7 +90,7 @@ func (server *serverStruct) getSignupPasskeyRegistration(signupPasskeyRegistrati
 				stmt.ColumnBytes(3, passkeyWebauthnCredentialId)
 
 				passkeyWebauthnAuthenticatorId := make([]byte, stmt.ColumnLen(4))
-				stmt.ColumnBytes(4, passkeyWebauthnCredentialId)
+				stmt.ColumnBytes(4, passkeyWebauthnAuthenticatorId)
 
 				createdAt := time.Unix(stmt.ColumnInt64(5), 0)
 
