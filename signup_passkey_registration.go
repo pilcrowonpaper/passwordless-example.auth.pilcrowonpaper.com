@@ -75,7 +75,7 @@ func (server *serverStruct) getSignupPasskeyRegistration(signupPasskeyRegistrati
 	}
 	err = sqlitex.Execute(
 		databaseReadConnection,
-		"SELECT signup_id, passkey_signature_algorithm, passkey_public_key, passkey_webauthn_credential_id, created_at FROM signup_passkey_registration WHERE id = ?",
+		"SELECT signup_id, passkey_signature_algorithm, passkey_public_key, passkey_webauthn_credential_id, passkey_webauthn_authenticator_id, created_at FROM signup_passkey_registration WHERE id = ?",
 		&sqlitex.ExecOptions{
 			Args: []any{signupPasskeyRegistrationId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
