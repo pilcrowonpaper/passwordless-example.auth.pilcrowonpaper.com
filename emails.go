@@ -104,7 +104,7 @@ Passwordless auth example: https://passwordless-example.auth.pilcrowonpaper.com`
 
 func (server *serverStruct) sendPasskeyRegisteredNotificationEmail(emailAddress string, passkeyName string) error {
 	subject := "A new passkey was registered to your account"
-	bodyTemplate := `A new passkey "%s" was registered to your account. If you did not make this change, please secure your account by signing in to your password immediately.
+	bodyTemplate := `A new passkey "%s" was registered to your account. If you did not make this change, please secure your account by signing in to your account immediately.
 
 Passwordless auth example: https://passwordless-example.auth.pilcrowonpaper.com`
 	body := fmt.Sprintf(bodyTemplate, passkeyName)
@@ -118,7 +118,7 @@ Passwordless auth example: https://passwordless-example.auth.pilcrowonpaper.com`
 
 func (server *serverStruct) sendPasskeyDeletedNotificationEmail(emailAddress string, passkeyName string) error {
 	subject := "A passkey was deleted from your account"
-	bodyTemplate := `Your passkey "%s" was deleted from your account. If you did not make this change, please secure your account by signing in to your password immediately.
+	bodyTemplate := `Your passkey "%s" was deleted from your account. If you did not make this change, please secure your account by signing in to your account immediately.
 
 Passwordless auth example: https://passwordless-example.auth.pilcrowonpaper.com`
 	body := fmt.Sprintf(bodyTemplate, passkeyName)
