@@ -121,7 +121,7 @@ func createSignUpVerifyEmailAddressPageHTML(requestId string, signupToken string
 <p>We sent an 8-digit verification code to %s. It may take up to 30 seconds to arrive. Check your spam or junk folder if you don't see it.</p>
 <form id="verify-verification-code-form">
 	<label for="verify-verification-code-form-verification-code-input">Verification code (hyphens and spaces are optional)</label>
-	<input id="verify-verification-code-form-verification-code-input" name="verification_code" required />
+	<input id="verify-verification-code-form-verification-code-input" name="verification_code" autocomplete="one-time-code" required />
 	<button id="verify-verification-code-form-submit-button">Verify email address</button>
 </form>
 <div id="controls">
@@ -238,7 +238,7 @@ func createSignInVerifyEmailCodePage(requestId string, emailCodeSigninToken stri
 <p>We sent a one-time code to %s.</p> 
 <form id="verify-email-code-form">
 	<label for="verify-email-code-form-email-code-input">Code</label>
-	<input id="verify-email-code-form-email-code-input" name="email_code" required/>
+	<input id="verify-email-code-form-email-code-input" name="email_code" autocomplete="one-time-code" required/>
 	<button id="verify-email-code-form-submit-button">Continue</button>
 </form>
 <button id="cancel-button" class="link-button">Cancel</button>`
@@ -322,7 +322,7 @@ func createVerifyIdentityVerifyEmailCodePageHTML(requestId string, sessionToken 
 <p>We sent a one-time code to %s.</p> 
 <form id="verify-email-code-form">
 	<label for="verify-email-code-form-email-code-input">Code</label>
-	<input id="verify-email-code-form-email-code-input" name="email_code" required/>
+	<input id="verify-email-code-form-email-code-input" name="email_code" autocomplete="one-time-code" required/>
 	<button id="verify-email-code-form-submit-button">Continue</button>
 </form>
 <button id="cancel-button" class="link-button">Cancel</button>`
@@ -379,7 +379,7 @@ func createUpdateEmailAddressVerifyNewEmailAddressPageHTML(requestId string, ses
 <p>We sent an 8-digit verification code to %s. It may take up to 30 seconds to arrive. Check your spam or junk folder if you don't see it.</p>
 <form id="verify-verification-code-form">
 	<label for="verify-verification-code-form-verification-code-input">Verification code (hyphens and spaces are optional)</label>
-	<input id="verify-verification-code-form-verification-code-input" name="verification_code" required />
+	<input id="verify-verification-code-form-verification-code-input" name="verification_code" autocomplete="one-time-code" required />
 	<button id="verify-verification-code-form-submit-button">Update email address</button>
 </form>
 <div id="controls">
