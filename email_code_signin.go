@@ -68,7 +68,7 @@ func (server *serverStruct) createEmailCodeSignin(userId string) (emailCodeSigni
 		},
 	)
 	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-	if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintUnique || sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
+	if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
 		return emailCodeSigninStruct{}, nil, "", errItemConflict
 	}
 	if err != nil {

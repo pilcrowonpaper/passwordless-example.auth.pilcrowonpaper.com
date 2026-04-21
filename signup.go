@@ -86,7 +86,7 @@ func (server *serverStruct) createSignup(emailAddress string) (signupStruct, []b
 		Args: []any{signup.id, signup.secretHash, signup.targetUserId, signup.emailAddress, signup.emailAddressVerificationCode, signup.createdAt.Unix()},
 	})
 	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-	if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintUnique || sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
+	if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
 		return signupStruct{}, nil, errItemConflict
 	}
 	if err != nil {

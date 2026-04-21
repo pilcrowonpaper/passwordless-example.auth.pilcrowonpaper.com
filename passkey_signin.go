@@ -50,7 +50,7 @@ func (server *serverStruct) createPasskeySignin() (passkeySigninStruct, error) {
 		},
 	)
 	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-	if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintUnique || sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
+	if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
 		return passkeySigninStruct{}, errItemConflict
 	}
 	if err != nil {

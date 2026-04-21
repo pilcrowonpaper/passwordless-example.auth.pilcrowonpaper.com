@@ -91,7 +91,7 @@ func (server *serverStruct) createSession(userId string) (sessionStruct, []byte,
 		},
 	)
 	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-	if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintUnique || sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
+	if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
 		return sessionStruct{}, nil, errItemConflict
 	}
 	if err != nil {
