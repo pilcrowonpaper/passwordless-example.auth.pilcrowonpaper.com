@@ -67,7 +67,7 @@ createPasskeyButtonElement.addEventListener("click", async () => {
             return
         }
         if (error.name === "InvalidStateError") {
-            alert("Your device, password manager, or security key already holds a registered passkey.");
+            alert("A passkey managed by your device, password manager, or security key is already registered.");
             createPasskeyButtonElement.disabled = false;
             return
         }
