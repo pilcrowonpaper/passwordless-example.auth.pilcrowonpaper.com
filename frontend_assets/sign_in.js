@@ -150,7 +150,39 @@ signInWithPasskeyButtonElement.addEventListener("click", async () => {
 	const clientDataJSON = new Uint8Array(credential.response.clientDataJSON);
 	const signature = new Uint8Array(credential.response.signature);
 
-	await verifyPasskeySigninWebauthnSignature(credentialId, authenticatorData, clientDataJSON, signature);
+	let sessionToken;
+	try {
+		const result = await verifyPasskeySigninWebauthnSignatureAction(credentialId, authenticatorData, clientDataJSON, signature);
+		if (!result.ok) {
+			if (result.errorCode === "passkey_signin_not_found") {
+				alert("Please try again.");
+				signInWithPasskeyButtonElement.disabled = false;
+				return;
+			}
+			if (result.errorCode === "passkey_not_found") {
+				alert("This passkey is not registered.");
+				signInWithPasskeyButtonElement.disabled = false;
+				return;
+			}
+			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
+		}
+
+		sessionToken = result.sessionToken;
+	} catch (error) {
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		signInWithPasskeyButtonElement.disabled = false;
+		return;
+	}
+
+	if (window.location.protocol === "https:") {
+		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/; Secure`;
+	} else {
+		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/`;
+	}
+	clientStateEventChannel.postMessage("session_updated");
+
+	window.location.href = "/account";
 });
 
 startConditionalMediationCredentialRequest();
@@ -183,10 +215,42 @@ async function startConditionalMediationCredentialRequest() {
 	const clientDataJSON = new Uint8Array(credential.response.clientDataJSON);
 	const signature = new Uint8Array(credential.response.signature);
 
-	await verifyPasskeySigninWebauthnSignature(credentialId, authenticatorData, clientDataJSON, signature);
+	let sessionToken;
+	try {
+		const result = await verifyPasskeySigninWebauthnSignatureAction(credentialId, authenticatorData, clientDataJSON, signature);
+		if (!result.ok) {
+			if (result.errorCode === "passkey_signin_not_found") {
+				alert("Please try again.");
+				signInWithPasskeyButtonElement.disabled = false;
+				return;
+			}
+			if (result.errorCode === "passkey_not_found") {
+				alert("This passkey is not registered.");
+				signInWithPasskeyButtonElement.disabled = false;
+				return;
+			}
+			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
+		}
+
+		sessionToken = result.sessionToken;
+	} catch (error) {
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		signInWithPasskeyButtonElement.disabled = false;
+		return;
+	}
+
+	if (window.location.protocol === "https:") {
+		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/; Secure`;
+	} else {
+		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/`;
+	}
+	clientStateEventChannel.postMessage("session_updated");
+
+	window.location.href = "/account";
 }
 
-async function verifyPasskeySigninWebauthnSignature(credentialId, authenticatorData, clientDataJSON, signature) {
+async function verifyPasskeySigninWebauthnSignatureAction(credentialId, authenticatorData, clientDataJSON, signature) {
 	const actionValuesJSONObject = {
 		passkey_signin_id: passkeySigninId,
 		webauthn_credential_id: credentialId.toBase64(),
@@ -206,42 +270,32 @@ async function verifyPasskeySigninWebauthnSignature(credentialId, authenticatorD
 	});
 	request.headers.set("Content-Type", "application/json");
 
-	let sessionToken;
+	let response;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "passkey_signin_not_found") {
-				alert("Please try again.");
-				signInWithPasskeyButtonElement.disabled = false;
-				return;
-			}
-			if (resultJSONObject.error_code === "passkey_not_found") {
-				alert("This passkey is not registered.");
-				signInWithPasskeyButtonElement.disabled = false;
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
-
-		sessionToken = resultJSONObject.values.session_token;
+		response = await fetch(request);
 	} catch (error) {
-		console.error(error);
-		alert("An unexpected error occurred. Please try again.");
-		signInWithPasskeyButtonElement.disabled = false;
-		return;
+		throw new Error("Failed to send request", {
+			cause: error,
+		});
+	}
+	if (!response.ok) {
+		await response.body.cancel();
+		throw new Error(`Unexpected response status code ${response.status}`);
 	}
 
-	if (window.location.protocol === "https:") {
-		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/; Secure`;
-	} else {
-		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/`;
+	const resultJSONObject = await response.json();
+	if (!resultJSONObject.ok) {
+		const result = {
+			ok: false,
+			errorCode: resultJSONObject.error_code,
+		};
+		return result
 	}
-	clientStateEventChannel.postMessage("session_updated");
 
-	window.location.href = "/account";
+	const result = {
+		ok: true,
+		sessionToken: resultJSONObject.values.session_token,
+	};
+
+	return result;
 }
