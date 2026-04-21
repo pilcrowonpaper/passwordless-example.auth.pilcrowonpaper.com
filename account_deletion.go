@@ -176,7 +176,7 @@ func (server *serverStruct) getAccountDeletion(accountDeletionId string) (accoun
 
 	accountDeletion := accountDeletions[0]
 
-	if time.Since(accountDeletion.createdAt) >= time.Minute*60 {
+	if time.Since(accountDeletion.createdAt) >= time.Hour {
 		return accountDeletionStruct{}, errItemNotFound
 	}
 

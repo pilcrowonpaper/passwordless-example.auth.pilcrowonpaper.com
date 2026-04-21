@@ -695,7 +695,7 @@ func (server *serverStruct) startEmailCodeSigninAction(requestId string, emailAd
 		return "", errorCodeRateLimited
 	}
 
-	emailCodeSignin, emailCodeSigninSecret, emailCode, err := server.createEmailCodeSignin(user.id)
+	emailCodeSignin, emailCodeSigninSecret, emailCode, err := server.createEmailCodeSignin(user.id, user.emailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create signin: %s", err.Error())
 		server.logActionError(requestId, errorMessage)
@@ -767,16 +767,6 @@ func (server *serverStruct) verifyEmailCodeSigninEmailCodeAction(requestId strin
 		return "", errorCodeUnexpectedError
 	}
 
-	userEmailAddress, err := server.getEmailCodeSigninUserEmailAddress(emailCodeSignin.id)
-	if errors.Is(err, errItemNotFound) {
-		return "", errorCodeConflict
-	}
-	if err != nil {
-		errorMessage := fmt.Sprintf("failed to get email code signin user email address: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
-		return "", errorCodeUnexpectedError
-	}
-
 	rateLimitAllowed := server.userEmailCodeVerificationAuthenticationRateLimit.Consume(emailCodeSignin.userId)
 	if !rateLimitAllowed {
 		return "", errorCodeRateLimited
@@ -785,7 +775,7 @@ func (server *serverStruct) verifyEmailCodeSigninEmailCodeAction(requestId strin
 	emailCodeHash := server.hashEmailCode(emailCode, emailCodeSignin.emailCodeSalt)
 	emailCodeCorrect := constantTimeCompare(emailCodeSignin.emailCodeHash, emailCodeHash)
 	if !emailCodeCorrect {
-		server.logEmailCodeSigninEmailCodeVerificationFailedRequestEvent(requestId, emailCodeSignin.id, emailCodeSignin.userId, userEmailAddress)
+		server.logEmailCodeSigninEmailCodeVerificationFailedRequestEvent(requestId, emailCodeSignin.id, emailCodeSignin.userId, emailCodeSignin.emailAddress)
 		return "", errorCodeIncorrectEmailCode
 	}
 
@@ -799,16 +789,16 @@ func (server *serverStruct) verifyEmailCodeSigninEmailCodeAction(requestId strin
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logEmailCodeSigninCompletedRequestEvent(requestId, emailCodeSignin.id, emailCodeSignin.userId, userEmailAddress, session.id)
+	server.logEmailCodeSigninCompletedRequestEvent(requestId, emailCodeSignin.id, emailCodeSignin.userId, emailCodeSignin.emailAddress, session.id)
 
-	err = server.sendSignedInNotificationEmail(userEmailAddress)
+	err = server.sendSignedInNotificationEmail(emailCodeSignin.emailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send signed in email: %s", err.Error())
 		server.logActionError(requestId, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logRequestEmail(requestId, userEmailAddress, emailTypeSignedInNotification)
+	server.logRequestEmail(requestId, emailCodeSignin.emailAddress, emailTypeSignedInNotification)
 
 	sessionToken := createSessionToken(session.id, sessionSecret)
 
@@ -1093,7 +1083,7 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 		return "", errorCodeInvalidWebauthnSignature
 	}
 
-	err = server.completeIdentityVerification(identityVerification.verifyingAction, identityVerification.verifyingActionId)
+	err = server.completeIdentityVerification(identityVerification.id, identityVerification.verifyingAction)
 	if errors.Is(err, errItemNotFound) || errors.Is(err, errItemConflict) {
 		return "", errorCodeConflict
 	}
@@ -1141,7 +1131,17 @@ func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId s
 		return errorCodeSessionMismatch
 	}
 
-	emailCode, userEmailAddress, err := server.issueIdentityVerificationEmailCode(identityVerification.id)
+	user, err := server.getUser(session.userId)
+	if errors.Is(err, errItemNotFound) {
+		return errorCodeConflict
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get user: %s", err.Error())
+		server.logActionError(requestId, errorMessage)
+		return errorCodeUnexpectedError
+	}
+
+	emailCode, err := server.issueIdentityVerificationEmailCode(identityVerification.id, user.emailAddress)
 	if errors.Is(err, errItemConflict) {
 		return errorCodeConflict
 	}
@@ -1151,16 +1151,24 @@ func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId s
 		return errorCodeUnexpectedError
 	}
 
-	server.logIdentityVerificationEmailCodeIssuedRequestEvent(requestId, session.id, session.userId, identityVerification.id, identityVerification.verifyingAction, identityVerification.verifyingActionId, userEmailAddress)
+	server.logIdentityVerificationEmailCodeIssuedRequestEvent(
+		requestId,
+		session.id,
+		session.userId,
+		identityVerification.id,
+		identityVerification.verifyingAction,
+		identityVerification.verifyingActionId,
+		identityVerification.emailAddress,
+	)
 
-	err = server.sendIdentityVerificationEmailCode(userEmailAddress, emailCode)
+	err = server.sendIdentityVerificationEmailCode(user.emailAddress, emailCode)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send identity verification email code: %s", err.Error())
 		server.logActionError(requestId, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
-	server.logRequestEmail(requestId, userEmailAddress, emailTypeIdentityVerificationEmailCode)
+	server.logRequestEmail(requestId, user.emailAddress, emailTypeIdentityVerificationEmailCode)
 
 	return ""
 }
@@ -1200,7 +1208,7 @@ func (server *serverStruct) revokeIdentityVerificationEmailCodeAction(requestId 
 		return errorCodeSessionMismatch
 	}
 
-	if !identityVerification.emailCodeHashDefined {
+	if !identityVerification.emailAddressDefined {
 		return errorCodeEmailCodeNotIssued
 	}
 
@@ -1253,22 +1261,17 @@ func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId 
 		return "", errorCodeSessionMismatch
 	}
 
-	if !identityVerification.emailCodeHashDefined {
+	if !identityVerification.emailAddressDefined {
 		return "", errorCodeEmailCodeNotIssued
 	}
 
-	if !identityVerification.emailCodeSaltDefined {
-		errorMessage := "identity verification email code salt not defined"
+	if !identityVerification.emailCodeHashDefined {
+		errorMessage := "identity verification email code hash not defined"
 		server.logActionError(requestId, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
-
-	userEmailAddress, err := server.getIdentityVerificationUserEmailAddress(identityVerification.id)
-	if errors.Is(err, errItemNotFound) {
-		return "", errorCodeConflict
-	}
-	if err != nil {
-		errorMessage := fmt.Sprintf("failed to get identity verification email code verification user email address: %s", err.Error())
+	if !identityVerification.emailCodeSaltDefined {
+		errorMessage := "identity verification email code salt not defined"
 		server.logActionError(requestId, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
@@ -1288,12 +1291,12 @@ func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId 
 			identityVerification.id,
 			identityVerification.verifyingAction,
 			identityVerification.verifyingActionId,
-			userEmailAddress,
+			identityVerification.emailAddress,
 		)
 		return "", errorCodeIncorrectEmailCode
 	}
 
-	err = server.completeIdentityVerification(identityVerification.verifyingAction, identityVerification.verifyingActionId)
+	err = server.completeIdentityVerification(identityVerification.id, identityVerification.verifyingAction)
 	if errors.Is(err, errItemNotFound) || errors.Is(err, errItemConflict) {
 		return "", errorCodeConflict
 	}
@@ -1310,7 +1313,7 @@ func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId 
 		identityVerification.id,
 		identityVerification.verifyingAction,
 		identityVerification.verifyingActionId,
-		userEmailAddress,
+		identityVerification.emailAddress,
 	)
 
 	return identityVerification.verifyingAction, ""

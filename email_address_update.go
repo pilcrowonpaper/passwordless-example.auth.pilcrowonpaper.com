@@ -205,7 +205,7 @@ func (server *serverStruct) getEmailAddressUpdate(emailAddressUpdateId string) (
 
 	emailAddressUpdate := emailAddressUpdates[0]
 
-	if time.Since(emailAddressUpdate.createdAt) >= time.Minute*60 {
+	if time.Since(emailAddressUpdate.createdAt) >= time.Hour {
 		return emailAddressUpdateStruct{}, errItemNotFound
 	}
 
@@ -272,74 +272,6 @@ func (server *serverStruct) validateRequestEmailAddressUpdateToken(r *http.Reque
 	}
 
 	return emailAddressUpdate, emailAddressUpdateToken, nil
-}
-
-func (server *serverStruct) completeEmailAddressUpdateIdentityVerification(emailAddressUpdateId string) error {
-	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
-	if err != nil {
-		return fmt.Errorf("failed to take database write connection: %s", err.Error())
-	}
-
-	err = sqlitex.Execute(databaseWriteConnection, "BEGIN IMMEDIATE", nil)
-	if err != nil {
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		return fmt.Errorf("failed to begin transaction: %s", err.Error())
-	}
-
-	err = sqlitex.Execute(databaseWriteConnection, "UPDATE email_address_update SET identity_verified = 1 WHERE id = ? AND identity_verified = 0", &sqlitex.ExecOptions{
-		Args: []any{emailAddressUpdateId},
-	})
-	if err != nil {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-
-		if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintUnique || sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
-			return errItemConflict
-		}
-		return fmt.Errorf("failed to update email_address_update table: %s", err.Error())
-	}
-	affectedCount := databaseWriteConnection.Changes()
-	if affectedCount < 1 {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-		return errItemNotFound
-	}
-
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM identity_verification WHERE verifying_action = 'email_address_update' AND verifying_action_id = ?", &sqlitex.ExecOptions{
-		Args: []any{emailAddressUpdateId},
-	})
-	if err != nil {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-
-		if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintUnique || sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
-			return errItemConflict
-		}
-		return fmt.Errorf("failed to update identity_verification table: %s", err.Error())
-	}
-
-	err = sqlitex.Execute(databaseWriteConnection, "COMMIT", nil)
-	if err != nil {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-		return fmt.Errorf("failed to commit transaction: %s", err.Error())
-	}
-
-	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-
-	return nil
 }
 
 func (server *serverStruct) setEmailAddressUpdateNewEmailAddress(emailAddressUpdateId string, newEmailAddress string) (string, error) {
@@ -412,7 +344,6 @@ WHERE email_address_update.id = ?`,
 	}
 	oldEmailAddress := oldEmailAddresses[0]
 
-	userIds := []string{}
 	err = sqlitex.Execute(
 		databaseWriteConnection,
 		`UPDATE user SET email_address = email_address_update.new_email_address FROM session
@@ -424,11 +355,6 @@ AND email_address_update.identity_verified = 1
 RETURNING user.id`,
 		&sqlitex.ExecOptions{
 			Args: []any{emailAddressUpdateId},
-			ResultFunc: func(stmt *sqlite.Stmt) error {
-				userId := stmt.ColumnText(0)
-				userIds = append(userIds, userId)
-				return nil
-			},
 		})
 	if err != nil {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
@@ -442,8 +368,8 @@ RETURNING user.id`,
 		}
 		return "", fmt.Errorf("failed to insert into user table: %s", err.Error())
 	}
-
-	if len(userIds) < 1 {
+	affectedCount := databaseWriteConnection.Changes()
+	if affectedCount < 1 {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 		if rollbackErr != nil {
@@ -451,7 +377,6 @@ RETURNING user.id`,
 		}
 		return "", errItemNotFound
 	}
-	userId := userIds[0]
 
 	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM email_address_update WHERE id = ?", &sqlitex.ExecOptions{
 		Args: []any{emailAddressUpdateId},
@@ -463,32 +388,6 @@ RETURNING user.id`,
 			return "", fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
 		return "", fmt.Errorf("failed to delete from email_address_update table: %s", err.Error())
-	}
-
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM email_code_signin WHERE user_id = ?", &sqlitex.ExecOptions{
-		Args: []any{userId},
-	})
-	if err != nil {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return "", fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-		return "", fmt.Errorf("failed to delete from signin table: %s", err.Error())
-	}
-
-	err = sqlitex.Execute(databaseWriteConnection, `UPDATE identity_verification SET email_code_hash = NULL, email_code_salt = NULL FROM session 
-WHERE identity_verification.session_id = session.id
-AND session.user_id = ?`, &sqlitex.ExecOptions{
-		Args: []any{userId},
-	})
-	if err != nil {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return "", fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-		return "", fmt.Errorf("failed to update identity_verification table: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(databaseWriteConnection, "COMMIT", nil)

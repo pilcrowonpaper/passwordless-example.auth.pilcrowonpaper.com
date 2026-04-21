@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -13,9 +12,6 @@ import (
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
-
-var errItemNotFound = errors.New("item not found")
-var errItemConflict = errors.New("item conflict")
 
 func setUpDatabase() error {
 	currentSchemaHash := sha256.Sum256([]byte(schemaSQLScript))

@@ -49,6 +49,10 @@ h1 {
 	margin-bottom: 2rem;
 }
 
+form {
+	margin-top: 1rem;
+}
+
 form label {
 	display: block;
 	margin-bottom: 0.5rem;
@@ -64,10 +68,6 @@ form input {
 	width: 100%;
 	background-color: var(--input-background-color);
 	margin-bottom: 1rem;
-}
-
-h1 + p + form {
-	margin-top: 1rem;
 }
 
 p > a {

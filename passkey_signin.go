@@ -100,7 +100,7 @@ func (server *serverStruct) getPasskeySignin(passkeySigninId string) (passkeySig
 
 	passkeySignin := passkeySignins[0]
 
-	if time.Since(passkeySignin.createdAt) >= time.Minute*60 {
+	if time.Since(passkeySignin.createdAt) >= time.Hour {
 		return passkeySigninStruct{}, errItemNotFound
 	}
 

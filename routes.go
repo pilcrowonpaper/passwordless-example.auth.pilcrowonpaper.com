@@ -1345,22 +1345,7 @@ func (server *serverStruct) signInVerifyEmailCodePageRoute(w http.ResponseWriter
 		return
 	}
 
-	userEmailAddress, err := server.getEmailCodeSigninUserEmailAddress(emailCodeSignin.id)
-	if errors.Is(err, errItemNotFound) {
-		server.setBlankSignupTokenCookie(w)
-		w.Header().Set("Location", "/sign-in")
-		w.WriteHeader(303)
-		return
-	}
-	if err != nil {
-		errorMessage := fmt.Sprintf("failed to get email code signin user email address: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
-		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
-		writePageHTMLResponse(w, 500, pageHTML)
-		return
-	}
-
-	pageHTML := createSignInVerifyEmailCodePage(requestId, emailCodeSigninToken, userEmailAddress)
+	pageHTML := createSignInVerifyEmailCodePage(requestId, emailCodeSigninToken, emailCodeSignin.emailAddress)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
@@ -1455,21 +1440,13 @@ func (server *serverStruct) verifyIdentityVerifyEmailCodePageRoute(w http.Respon
 		return
 	}
 
-	userEmailAddress, err := server.getIdentityVerificationUserEmailAddress(identityVerification.id)
-	if errors.Is(err, errItemNotFound) {
+	if !identityVerification.emailAddressDefined {
 		w.Header().Set("Location", "/verify-identity")
 		w.WriteHeader(303)
 		return
 	}
-	if err != nil {
-		errorMessage := fmt.Sprintf("failed to get identity verification email code verification user email address: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
-		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
-		writePageHTMLResponse(w, 500, pageHTML)
-		return
-	}
 
-	pageHTML := createVerifyIdentityVerifyEmailCodePageHTML(requestId, sessionToken, identityVerificationToken, userEmailAddress)
+	pageHTML := createVerifyIdentityVerifyEmailCodePageHTML(requestId, sessionToken, identityVerificationToken, identityVerification.emailAddress)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
