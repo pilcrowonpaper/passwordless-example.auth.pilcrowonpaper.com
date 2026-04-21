@@ -230,10 +230,11 @@ func (server *serverStruct) verifySignupEmailAddressVerificationCodeAction(reque
 
 func (server *serverStruct) completeSignupWithoutPasskeyRegistrationAction(requestId string, signupToken string) (string, string) {
 	const (
-		errorCodeInvalidSignupToken      = "invalid_signup_token"
-		errorCodeEmailAddressNotVerified = "email_address_not_verified"
-		errorCodeEmailAddressAlreadyUsed = "email_address_already_used"
-		errorCodeUnexpectedError         = "unexpected_error"
+		errorCodeInvalidSignupToken           = "invalid_signup_token"
+		errorCodeEmailAddressNotVerified      = "email_address_not_verified"
+		errorCodePasskeyWebauthnCredentialSet = "passkey_webauthn_credential_set"
+		errorCodeEmailAddressAlreadyUsed      = "email_address_already_used"
+		errorCodeUnexpectedError              = "unexpected_error"
 	)
 
 	signup, err := server.validateSignupToken(signupToken)
@@ -248,6 +249,9 @@ func (server *serverStruct) completeSignupWithoutPasskeyRegistrationAction(reque
 
 	if !signup.emailAddressVerified {
 		return "", errorCodeEmailAddressNotVerified
+	}
+	if signup.passkeyWebauthnCredentialIdDefined {
+		return "", errorCodePasskeyWebauthnCredentialSet
 	}
 
 	emailAddressAvailable, err := server.checkUserEmailAddressAvailability(signup.emailAddress)
