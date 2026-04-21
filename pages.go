@@ -523,7 +523,7 @@ func createPageHTML(requestId string, title string, bodyHTML string, script stri
 	htmlTemplate := `<html lang="en">
 <head>
 	<title>%s</title>
-	<meta name="description" content="An example website that implements email address and password authentication following best practices." />
+	<meta name="description" content="An example website that implements email code sign-in and passkeys following best practices." />
 
 	<meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
