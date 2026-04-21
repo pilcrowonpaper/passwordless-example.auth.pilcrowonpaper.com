@@ -90,7 +90,6 @@ signInWithPasskeyButtonElement.addEventListener("click", async () => {
 	if (Date.now() >= passkeySigninRefreshAt.getTime()) {
 		const startPasskeySigninActionValuesJSONObject = {
 			email_address: emailAddress,
-			password: password,
 		};
 		const startPasskeySigninActionRequestBodyJSONObject = {
 			action: "start_passkey_signin",
