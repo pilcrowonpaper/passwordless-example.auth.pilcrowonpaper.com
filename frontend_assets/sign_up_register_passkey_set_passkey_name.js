@@ -59,6 +59,18 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 				submitButtonElement.disabled = false;
 				return;
 			}
+			if (resultJSONObject.error_code === "email_address_already_used") {
+                if (window.location.protocol === "https:") {
+					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
+				} else {
+					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
+				}
+				clientStateEventChannel.postMessage("signup_updated");
+
+				alert("This email address is already linked to an existing account.");
+				window.location.href = "/sign-up";
+				return;
+            }
 			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
 		}
 
