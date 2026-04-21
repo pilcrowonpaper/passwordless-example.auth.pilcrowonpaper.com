@@ -149,9 +149,7 @@ func createSignUpRegisterPasskeyPage(requestId string, signupToken string, signu
 	title := "Register a passkey | Passwordless auth example"
 
 	bodyHTML := `<h1>Register a passkey</h1>
-<p>Passkeys are secure login credentials stored on your device, password manager, or security key.
-By creating a passkey with your Apple, Android, or Windows device, you can sign in using your device's PIN or biometrics.
-With a password manager, passkeys offer a sign-in experience similar to regular passwords.</p>
+<p>Passkeys are secure login credentials stored on your device, password manager, or security key that allow you to sign in using your device PIN or biometrics.</p>
 <div id="controls">
 	<button id="create-passkey-button" class="block-button">Create a passkey</button>
 	<button id="skip-button" class="link-button">Skip</button>
