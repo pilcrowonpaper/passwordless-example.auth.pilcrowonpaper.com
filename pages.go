@@ -537,7 +537,7 @@ func createPageHTML(requestId string, title string, bodyHTML string, script stri
 	<meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@pilcrowonpaper">
 
-	<link rel="icon" type="image/jpeg" href="https://pilcrowonpaper.com/pilcrow.jpeg" />
+	<link rel="icon" type="image/jpeg" href="https://pilcrowonpaper.com/pilcrow.jpeg">
 
 	<style>%s</style>
 	<style>%s</style>
