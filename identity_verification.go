@@ -295,7 +295,7 @@ WHERE identity_verification.id = ?`,
 			return "", "", fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
 
-		return "", "", errItemConflict
+		return "", "", fmt.Errorf("expected user to exist")
 	}
 	userEmailAddress := userEmailAddresses[0]
 
