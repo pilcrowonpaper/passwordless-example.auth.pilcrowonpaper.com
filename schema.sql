@@ -15,12 +15,16 @@ CREATE TABLE passkey (
     created_at INTEGER NOT NULL
 ) STRICT;
 
+CREATE INDEX passkey_user_id_index ON passkey(user_id);
+
 CREATE TABLE session (
     id TEXT NOT NULL PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
     secret_hash BLOB NOT NULL,
     created_at INTEGER NOT NULL
 ) STRICT;
+
+CREATE INDEX session_user_id_index ON session(user_id);
 
 CREATE TABLE signup (
     id TEXT NOT NULL PRIMARY KEY,
@@ -52,6 +56,8 @@ CREATE TABLE email_code_signin (
     created_at INTEGER NOT NULL
 ) STRICT;
 
+CREATE INDEX email_code_signin_user_id_index ON email_code_signin(id);
+
 CREATE TABLE identity_verification (
     id TEXT NOT NULL PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES session(id) ON DELETE CASCADE,
@@ -65,6 +71,9 @@ CREATE TABLE identity_verification (
     created_at INTEGER NOT NULL
 ) STRICT;
 
+CREATE INDEX email_code_signin_session_id_index ON identity_verification(session_id);
+CREATE INDEX identity_verification_verifying_action_id_index ON identity_verification(verifying_action_id);
+
 CREATE TABLE email_address_update (
     id TEXT NOT NULL PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES session(id) ON DELETE CASCADE,
@@ -74,6 +83,8 @@ CREATE TABLE email_address_update (
     new_email_address_verification_code TEXT,
     created_at INTEGER NOT NULL
 ) STRICT;
+
+CREATE INDEX email_address_update_session_id_index ON email_address_update(session_id);
 
 CREATE TABLE passkey_registration (
     id TEXT NOT NULL PRIMARY KEY,
@@ -87,6 +98,8 @@ CREATE TABLE passkey_registration (
     created_at INTEGER NOT NULL
 ) STRICT;
 
+CREATE INDEX passkey_registration_session_id_index ON passkey_registration(session_id);
+
 CREATE TABLE passkey_deletion (
     id TEXT NOT NULL PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES session(id) ON DELETE CASCADE,
@@ -96,6 +109,8 @@ CREATE TABLE passkey_deletion (
     created_at INTEGER NOT NULL
 ) STRICT;
 
+CREATE INDEX passkey_deletion_session_id_index ON passkey_deletion(session_id);
+
 CREATE TABLE account_deletion (
     id TEXT NOT NULL PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES session(id) ON DELETE CASCADE,
@@ -103,3 +118,5 @@ CREATE TABLE account_deletion (
     identity_verified INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
 ) STRICT;
+
+CREATE INDEX account_deletion_session_id_index ON account_deletion(session_id);
