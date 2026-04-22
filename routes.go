@@ -1389,9 +1389,6 @@ func (server *serverStruct) signUpRegisterPasskeyPageRoute(w http.ResponseWriter
 //go:embed frontend_assets/sign_up_register_passkey_set_passkey_name.js
 var signUpRegisterPasskeySetPasskeyNameScript string
 
-//go:embed frontend_assets/sign_up_register_passkey_set_passkey_name.css
-var signUpRegisterPasskeySetPasskeyNameStylesheet string
-
 func (server *serverStruct) signUpRegisterPasskeySetPasskeyNamePageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	_, _, err := server.validateRequestSessionToken(r)
 	if err == nil {
@@ -1454,7 +1451,7 @@ func (server *serverStruct) signUpRegisterPasskeySetPasskeyNamePageRoute(w http.
 	pageDataJSONBuilder.AddString("signup_token", signupToken)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
-	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, signUpRegisterPasskeySetPasskeyNameScript, signUpRegisterPasskeySetPasskeyNameStylesheet, pageDataJSON)
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, signUpRegisterPasskeySetPasskeyNameScript, "", pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
