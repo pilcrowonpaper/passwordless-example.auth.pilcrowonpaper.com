@@ -31,26 +31,34 @@ func main() {
 	if portString == "" {
 		portString = "3000"
 	}
+	port, err := parseNonNegativeIntegerString(portString)
+	if err != nil {
+		log.Fatalf("invalid PORT environment variable: %s", err.Error())
+	}
+
 	originEnvValue := os.Getenv("ORIGIN")
+	if originEnvValue == "" {
+		originEnvValue = fmt.Sprintf("http://localhost:%d", port)
+	}
+
 	awsSESEnvValue := os.Getenv("AWS_SES")
 	if awsSESEnvValue == "" {
 		awsSESEnvValue = "0"
 	}
+
 	awsAccessKeyEnvValue := os.Getenv("AWS_ACCESS_KEY_ID")
+
 	awsSecretAccessKeyEnvValue := os.Getenv("AWS_SECRET_ACCESS_KEY")
+
 	awsRegionEnvValue := os.Getenv("AWS_REGION")
 	if awsRegionEnvValue == "" {
 		awsRegionEnvValue = "us-east-1"
 	}
+
 	awsSESEmailAddressEnvValue := os.Getenv("AWS_SES_EMAIL_ADDRESS")
 	logsEnvValue := os.Getenv("LOGS")
 	if logsEnvValue == "" {
 		logsEnvValue = "internal_error,background_job"
-	}
-
-	port, err := parseNonNegativeIntegerString(portString)
-	if err != nil {
-		log.Fatalf("invalid PORT environment variable: %s", err.Error())
 	}
 
 	webauthnRelyingPartyId := ""
