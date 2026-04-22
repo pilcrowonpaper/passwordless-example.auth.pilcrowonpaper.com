@@ -29,7 +29,7 @@ func createPageHTML(requestId string, title string, bodyHTML string, script stri
 	<meta property="og:locale" content="en_US" />
 	<meta property="og:site_name" content="Passwordless auth example" />
 	<meta property="og:description" content="An example website that implements email code sign-in and passkeys following best practices." />
-	<meta property="og:url" content="https://github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com" />
+	<meta property="og:url" content="https://passwordless-example.auth.pilcrowonpaper.com" />
 	<meta property="og:image" content="https://pilcrowonpaper.com/pilcrow.jpeg" />
 
 	<meta name="twitter:card" content="summary">
