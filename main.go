@@ -51,7 +51,7 @@ func main() {
 	} else if awsSESEnvValue == "0" {
 		awsSESEnabled = false
 	} else {
-		log.Fatalf("invalid AWS_SES environment variable value: %s", err.Error())
+		log.Fatal("invalid AWS_SES environment variable value")
 	}
 
 	awsAccessKeyEnvValue := os.Getenv("AWS_ACCESS_KEY_ID")
