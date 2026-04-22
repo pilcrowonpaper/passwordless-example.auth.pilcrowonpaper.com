@@ -63,7 +63,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		signupToken, errorCode := server.startSignupAction(requestId, clientIPAddress, emailAddress)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionStartSignup, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionStartSignup, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -84,7 +84,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.cancelSignupAction(requestId, clientIPAddress, signupToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionCancelSignup, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionCancelSignup, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -102,7 +102,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.sendSignupEmailAddressVerificationCodeAction(requestId, clientIPAddress, signupToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionSendSignupEmailAddressVerificationCode, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionSendSignupEmailAddressVerificationCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -125,7 +125,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.verifySignupEmailAddressVerificationCodeAction(requestId, clientIPAddress, signupToken, verificationCode)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionVerifySignupEmailAddressVerificationCode, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionVerifySignupEmailAddressVerificationCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -143,7 +143,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		sessionToken, errorCode := server.completeSignupWithoutPasskeyRegistrationAction(requestId, clientIPAddress, signupToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionCompleteSignupWithoutPasskeyRegistration, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionCompleteSignupWithoutPasskeyRegistration, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -208,7 +208,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			passkeyWebauthnAuthenticatorId,
 		)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionSetSignupPasskeyWebauthnCredential, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionSetSignupPasskeyWebauthnCredential, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -231,7 +231,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		sessionToken, errorCode := server.setSignupPasskeyNameAction(requestId, clientIPAddress, signupToken, passkeyName)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionSetSignupPasskeyName, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionSetSignupPasskeyName, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -247,7 +247,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	if actionName == actionStartPasskeySignin {
 		passkeySigninId, challenge, errorCode := server.startPasskeySigninAction(requestId, clientIPAddress)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionStartPasskeySignin, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionStartPasskeySignin, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -270,7 +270,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 
 		errorCode := server.cancelPasskeySigninAction(requestId, clientIPAddress, passkeySigninId)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionStartPasskeySignin, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionStartPasskeySignin, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -336,7 +336,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			webauthnSignature,
 		)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionVerifyPasskeySigninWebauthnSignature, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionVerifyPasskeySigninWebauthnSignature, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -357,7 +357,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		emailCodeSigninToken, errorCode := server.startEmailCodeSigninAction(requestId, clientIPAddress, emailAddress)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionStartEmailCodeSignin, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionStartEmailCodeSignin, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -378,7 +378,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.cancelEmailCodeSigninAction(requestId, clientIPAddress, emailCodeSigninToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionCancelEmailCodeSignin, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionCancelEmailCodeSignin, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -400,7 +400,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		sessionToken, errorCode := server.verifyEmailCodeSigninEmailCodeAction(requestId, clientIPAddress, emailCodeSigninToken, emailCode)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionVerifyEmailCodeSigninEmailCode, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionVerifyEmailCodeSigninEmailCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -421,7 +421,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.signOutAction(requestId, clientIPAddress, sessionToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionSignOut, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionSignOut, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -438,7 +438,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.signOutAllDevicesAction(requestId, clientIPAddress, sessionToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionSignOutAllDevices, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionSignOutAllDevices, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -460,7 +460,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		cancelledAction, errorCode := server.cancelIdentityVerificationAction(requestId, clientIPAddress, sessionToken, identityVerificationToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionCancelIdentityVerification, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionCancelIdentityVerification, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -535,7 +535,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			webauthnSignature,
 		)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionVerifyIdentityVerificationPasskeyWebauthnSignature, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionVerifyIdentityVerificationPasskeyWebauthnSignature, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -561,7 +561,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.issueIdentityVerificationEmailCodeAction(requestId, clientIPAddress, sessionToken, identityVerificationToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionIssueIdentityVerificationEmailCode, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionIssueIdentityVerificationEmailCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -589,7 +589,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			identityVerificationToken,
 		)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionRevokeIdentityVerificationEmailCode, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionRevokeIdentityVerificationEmailCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -623,7 +623,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			emailCode,
 		)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionVerifyIdentityVerificationEmailCode, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionVerifyIdentityVerificationEmailCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -644,7 +644,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		emailAddressUpdateToken, identityVerificationToken, errorCode := server.startEmailAddressUpdateAction(requestId, clientIPAddress, sessionToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionStartEmailAddressUpdate, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionStartEmailAddressUpdate, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -671,7 +671,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.cancelEmailAddressUpdateAction(requestId, clientIPAddress, sessionToken, emailAddressUpdateToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionStartEmailAddressUpdate, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionStartEmailAddressUpdate, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -698,7 +698,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.setEmailAddressUpdateNewEmailAddressAction(requestId, clientIPAddress, sessionToken, emailAddressUpdateToken, newEmailAddress)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionSetEmailAddressUpdateNewEmailAddress, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionSetEmailAddressUpdateNewEmailAddress, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -720,7 +720,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.sendEmailAddressUpdateNewEmailAddressVerificationCodeAction(requestId, clientIPAddress, sessionToken, emailAddressUpdateToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionSendEmailAddressUpdateNewEmailAddressVerificationCode, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionSendEmailAddressUpdateNewEmailAddressVerificationCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -747,7 +747,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.verifyEmailAddressUpdateNewEmailAddressVerificationCodeAction(requestId, clientIPAddress, sessionToken, emailAddressUpdateToken, verificationCode)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionVerifyEmailAddressUpdateNewEmailAddressVerificationCode, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionVerifyEmailAddressUpdateNewEmailAddressVerificationCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -764,7 +764,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		passkeyRegistrationToken, identityVerificationToken, errorCode := server.startPasskeyRegistrationAction(requestId, clientIPAddress, sessionToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionStartPasskeyRegistration, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionStartPasskeyRegistration, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -791,7 +791,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.cancelPasskeyRegistrationAction(requestId, clientIPAddress, sessionToken, passkeyRegistrationToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionStartPasskeyRegistration, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionStartPasskeyRegistration, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -857,7 +857,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			webauthnAuthenticatorId,
 		)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionSetPasskeyRegistrationPasskeyWebauthnCredential, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionSetPasskeyRegistrationPasskeyWebauthnCredential, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -884,7 +884,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.setPasskeyRegistrationPasskeyNameAction(requestId, clientIPAddress, sessionToken, passkeyRegistrationToken, passkeyNameParam)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionSetPasskeyRegistrationPasskeyName, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionSetPasskeyRegistrationPasskeyName, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -906,7 +906,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		passkeyDeletionToken, identityVerificationToken, errorCode := server.startPasskeyDeletionAction(requestId, clientIPAddress, sessionToken, passkeyId)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionStartPasskeyDeletion, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionStartPasskeyDeletion, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -933,7 +933,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.cancelPasskeyDeletionAction(requestId, clientIPAddress, sessionToken, passkeyDeletionToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionStartPasskeyDeletion, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionStartPasskeyDeletion, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -955,7 +955,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.confirmPasskeyDeletionAction(requestId, clientIPAddress, sessionToken, passkeyDeletionToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionConfirmPasskeyDeletion, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionConfirmPasskeyDeletion, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -972,7 +972,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		accountDeletionToken, identityVerificationToken, errorCode := server.startAccountDeletionAction(requestId, clientIPAddress, sessionToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionStartAccountDeletion, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionStartAccountDeletion, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -999,7 +999,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.cancelAccountDeletionAction(requestId, clientIPAddress, sessionToken, accountDeletionToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionStartAccountDeletion, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionStartAccountDeletion, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}
@@ -1021,7 +1021,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		}
 		errorCode := server.confirmAccountDeletionAction(requestId, clientIPAddress, sessionToken, accountDeletionToken)
 		if errorCode != "" {
-			server.logRequestErrorResult(requestId, clientIPAddress, actionConfirmAccountDeletion, errorCode)
+			server.logActionErrorResult(requestId, clientIPAddress, actionConfirmAccountDeletion, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
 			return
 		}

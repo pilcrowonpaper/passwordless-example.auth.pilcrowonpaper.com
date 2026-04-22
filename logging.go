@@ -25,7 +25,7 @@ func (server *serverStruct) logActionSuccessResult(requestId string, clientIPAdd
 	fmt.Println(logJSON)
 }
 
-func (server *serverStruct) logRequestErrorResult(requestId string, clientIPAddress string, actionName string, errorCode string) {
+func (server *serverStruct) logActionErrorResult(requestId string, clientIPAddress string, actionName string, errorCode string) {
 	if !server.logging.actionResult {
 		return
 	}
