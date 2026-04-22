@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"passwordless-example.auth.pilcrowonpaper.com/webauthn"
+	"github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com/webauthn"
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )

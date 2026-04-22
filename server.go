@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/pilcrowonpaper/go-json"
-	"passwordless-example.auth.pilcrowonpaper.com/ratelimit"
+	"github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com/ratelimit"
 
 	"golang.org/x/sync/semaphore"
 	"zombiezen.com/go/sqlite"

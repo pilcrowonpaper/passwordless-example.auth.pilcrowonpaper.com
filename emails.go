@@ -12,7 +12,7 @@ func (server *serverStruct) sendSignupEmailAddressVerificationCodeEmail(emailAdd
 
 Do not share this code with anyone. If you didn't request this, you can safely ignore this email.
 
-Passwordless auth example: https://passwordless-example.auth.pilcrowonpaper.com`
+Passwordless auth example: https://github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com`
 	body := fmt.Sprintf(bodyTemplate, formattedEmailAddressVerificationCode)
 
 	err := server.emailClient.sendEmail(emailAddress, subject, body)
@@ -30,7 +30,7 @@ func (server *serverStruct) sendEmailAddressUpdateNewEmailAddressVerificationCod
 
 Do not share this code with anyone. If you didn't request this, you can safely ignore this email.
 
-Passwordless auth example: https://passwordless-example.auth.pilcrowonpaper.com`
+Passwordless auth example: https://github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com`
 	body := fmt.Sprintf(bodyTemplate, formattedEmailAddressVerificationCode)
 
 	err := server.emailClient.sendEmail(emailAddress, subject, body)
@@ -48,7 +48,7 @@ func (server *serverStruct) sendSigninEmailCode(emailAddress string, emailCode s
 
 Do not share this code with anyone. If you didn't request this, you can safely ignore this email.
 
-Passwordless auth example: https://passwordless-example.auth.pilcrowonpaper.com`
+Passwordless auth example: https://github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com`
 	body := fmt.Sprintf(bodyTemplate, formattedCode)
 
 	err := server.emailClient.sendEmail(emailAddress, subject, body)
@@ -62,7 +62,7 @@ func (server *serverStruct) sendSignedInNotificationEmail(emailAddress string) e
 	subject := "New sign-in to your account"
 	body := `We detected a recent login to your account. If this wasn't you, please secure your account by resetting your password immediately.
 
-Passwordless auth example: https://passwordless-example.auth.pilcrowonpaper.com`
+Passwordless auth example: https://github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com`
 
 	err := server.emailClient.sendEmail(emailAddress, subject, body)
 	if err != nil {
@@ -79,7 +79,7 @@ func (server *serverStruct) sendIdentityVerificationEmailCode(emailAddress strin
 
 Do not share this code with anyone. If you didn't request this, you can safely ignore this email.
 
-Passwordless auth example: https://passwordless-example.auth.pilcrowonpaper.com`
+Passwordless auth example: https://github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com`
 	body := fmt.Sprintf(bodyTemplate, formattedCode)
 
 	err := server.emailClient.sendEmail(emailAddress, subject, body)
@@ -93,7 +93,7 @@ func (server *serverStruct) sendEmailAddressUpdatedNotificationEmail(emailAddres
 	subject := "Your account email address was recently updated"
 	body := `This email address is no longer tied to your account.
 
-Passwordless auth example: https://passwordless-example.auth.pilcrowonpaper.com`
+Passwordless auth example: https://github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com`
 
 	err := server.emailClient.sendEmail(emailAddress, subject, body)
 	if err != nil {
@@ -106,7 +106,7 @@ func (server *serverStruct) sendPasskeyRegisteredNotificationEmail(emailAddress 
 	subject := "A new passkey was registered to your account"
 	bodyTemplate := `A new passkey "%s" was registered to your account. If you did not make this change, please secure your account by signing in to your account immediately.
 
-Passwordless auth example: https://passwordless-example.auth.pilcrowonpaper.com`
+Passwordless auth example: https://github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com`
 	body := fmt.Sprintf(bodyTemplate, passkeyName)
 
 	err := server.emailClient.sendEmail(emailAddress, subject, body)
@@ -120,7 +120,7 @@ func (server *serverStruct) sendPasskeyDeletedNotificationEmail(emailAddress str
 	subject := "A passkey was deleted from your account"
 	bodyTemplate := `Your passkey "%s" was deleted from your account. If you did not make this change, please secure your account by signing in to your account immediately.
 
-Passwordless auth example: https://passwordless-example.auth.pilcrowonpaper.com`
+Passwordless auth example: https://github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com`
 	body := fmt.Sprintf(bodyTemplate, passkeyName)
 
 	err := server.emailClient.sendEmail(emailAddress, subject, body)

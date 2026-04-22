@@ -13,7 +13,7 @@ import (
 	"errors"
 	"fmt"
 
-	"passwordless-example.auth.pilcrowonpaper.com/webauthn"
+	"github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com/webauthn"
 )
 
 const (
