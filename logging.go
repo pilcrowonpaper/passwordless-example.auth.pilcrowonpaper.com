@@ -44,8 +44,8 @@ func (server *serverStruct) logActionErrorResult(requestId string, clientIPAddre
 	fmt.Println(logJSON)
 }
 
-func (server *serverStruct) logRequestError(requestId string, clientIPAddress string, errorMessage string) {
-	if !server.logging.requestError {
+func (server *serverStruct) logActionInternalError(requestId string, clientIPAddress string, actionName string, errorMessage string) {
+	if !server.logging.internalError {
 		return
 	}
 
@@ -56,6 +56,26 @@ func (server *serverStruct) logRequestError(requestId string, clientIPAddress st
 	logJSONBuilder.AddInt64("timestamp", now.Unix())
 	logJSONBuilder.AddString("request_id", requestId)
 	logJSONBuilder.AddString("client_ip_address", clientIPAddress)
+	logJSONBuilder.AddString("action", actionName)
+	logJSONBuilder.AddString("message", errorMessage)
+	logJSON := logJSONBuilder.Done()
+
+	fmt.Println(logJSON)
+}
+
+func (server *serverStruct) logRouteInternalError(requestId string, clientIPAddress string, actionName string, errorMessage string) {
+	if !server.logging.internalError {
+		return
+	}
+
+	now := time.Now()
+
+	logJSONBuilder := json.NewObjectBuilder(loggingJSONStringCharacterEscapingBehavior)
+	logJSONBuilder.AddString("type", "request_error")
+	logJSONBuilder.AddInt64("timestamp", now.Unix())
+	logJSONBuilder.AddString("request_id", requestId)
+	logJSONBuilder.AddString("client_ip_address", clientIPAddress)
+	logJSONBuilder.AddString("action", actionName)
 	logJSONBuilder.AddString("message", errorMessage)
 	logJSON := logJSONBuilder.Done()
 

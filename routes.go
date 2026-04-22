@@ -13,6 +13,26 @@ import (
 	"github.com/pilcrowonpaper/go-json"
 )
 
+const (
+	routeAction                                      = "action"
+	routeHomePage                                    = "home_page"
+	routeAccountPage                                 = "account_page"
+	routeSignUpPage                                  = "sign_up_page"
+	routeSignUpVerifyEmailAddressPage                = "sign_up_verify_email_address_page"
+	routeSignUpRegisterPasskeyPage                   = "sign_up_register_passkey_page"
+	routeSignUpRegisterPasskeySetPasskeyNamePage     = "sign_up_register_passkey_set_passkey_name_page"
+	routeSignInPage                                  = "sign_in_page"
+	routeSignInVerifyEmailCodePage                   = "sign_in_verify_email_code_page"
+	routeVerifyIdentityPage                          = "verify_identity_page"
+	routeVerifyIdentityVerifyEmailCodePage           = "verify_identity_verify_email_code_page"
+	routeUpdateEmailAddressSetNewEmailAddressPage    = "update_email_address_set_new_email_address_page"
+	routeUpdateEmailAddressVerifyNewEmailAddressPage = "update_email_address_verify_new_email_address_page"
+	routeDeleteAccountConfirmPage                    = "delete_account_confirm_page"
+	routeRegisterPasskeyCreatePasskeyPage            = "register_passkey_create_passkey_page"
+	routeRegisterPasskeySetPasskeyNamePage           = "register_passkey_set_passkey_name_page"
+	routeDeletePasskeyConfirmPage                    = "delete_passkey_confirm_page"
+)
+
 func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	contentTypeHeader := r.Header.Get("Content-Type")
 	if contentTypeHeader != "" {
@@ -1076,7 +1096,7 @@ func (server *serverStruct) homePageRoute(w http.ResponseWriter, r *http.Request
 	}
 	if !errors.Is(err, errInvalidSessionToken) {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeHomePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1097,7 +1117,7 @@ func (server *serverStruct) accountPageRoute(w http.ResponseWriter, r *http.Requ
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeAccountPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1112,7 +1132,7 @@ func (server *serverStruct) accountPageRoute(w http.ResponseWriter, r *http.Requ
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeAccountPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1121,7 +1141,7 @@ func (server *serverStruct) accountPageRoute(w http.ResponseWriter, r *http.Requ
 	passkeys, err := server.getUserPasskeys(user.id)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user passkeys: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeAccountPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1141,7 +1161,7 @@ func (server *serverStruct) signUpPageRoute(w http.ResponseWriter, r *http.Reque
 	}
 	if !errors.Is(err, errInvalidSessionToken) {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1161,7 +1181,7 @@ func (server *serverStruct) signUpVerifyEmailAddressPageRoute(w http.ResponseWri
 	}
 	if !errors.Is(err, errInvalidSessionToken) {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpVerifyEmailAddressPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1176,7 +1196,7 @@ func (server *serverStruct) signUpVerifyEmailAddressPageRoute(w http.ResponseWri
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request signup token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpVerifyEmailAddressPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1202,7 +1222,7 @@ func (server *serverStruct) signUpRegisterPasskeyPageRoute(w http.ResponseWriter
 	}
 	if !errors.Is(err, errInvalidSessionToken) {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpRegisterPasskeyPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1217,7 +1237,7 @@ func (server *serverStruct) signUpRegisterPasskeyPageRoute(w http.ResponseWriter
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request signup token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpRegisterPasskeyPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1249,7 +1269,7 @@ func (server *serverStruct) signUpRegisterPasskeySetPasskeyNamePageRoute(w http.
 	}
 	if !errors.Is(err, errInvalidSessionToken) {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpRegisterPasskeySetPasskeyNamePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1264,7 +1284,7 @@ func (server *serverStruct) signUpRegisterPasskeySetPasskeyNamePageRoute(w http.
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request signup token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpRegisterPasskeySetPasskeyNamePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1301,7 +1321,7 @@ func (server *serverStruct) signInPageRoute(w http.ResponseWriter, r *http.Reque
 	}
 	if !errors.Is(err, errInvalidSessionToken) {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeSignInPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1310,7 +1330,7 @@ func (server *serverStruct) signInPageRoute(w http.ResponseWriter, r *http.Reque
 	passkeySignin, err := server.createPasskeySignin()
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create passkey signin: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeSignInPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1330,7 +1350,7 @@ func (server *serverStruct) signInVerifyEmailCodePageRoute(w http.ResponseWriter
 	}
 	if !errors.Is(err, errInvalidSessionToken) {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeSignInVerifyEmailCodePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1345,7 +1365,7 @@ func (server *serverStruct) signInVerifyEmailCodePageRoute(w http.ResponseWriter
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request email code signin token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeSignInVerifyEmailCodePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1366,7 +1386,7 @@ func (server *serverStruct) verifyIdentityPageRoute(w http.ResponseWriter, r *ht
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1381,7 +1401,7 @@ func (server *serverStruct) verifyIdentityPageRoute(w http.ResponseWriter, r *ht
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request identity verification token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1397,7 +1417,7 @@ func (server *serverStruct) verifyIdentityPageRoute(w http.ResponseWriter, r *ht
 	passkeys, err := server.getUserPasskeys(session.userId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user passkeys: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1418,7 +1438,7 @@ func (server *serverStruct) verifyIdentityVerifyEmailCodePageRoute(w http.Respon
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityVerifyEmailCodePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1433,7 +1453,7 @@ func (server *serverStruct) verifyIdentityVerifyEmailCodePageRoute(w http.Respon
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request identity verification token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityVerifyEmailCodePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1467,7 +1487,7 @@ func (server *serverStruct) updateEmailAddressSetNewEmailAddressPageRoute(w http
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeUpdateEmailAddressSetNewEmailAddressPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1482,7 +1502,7 @@ func (server *serverStruct) updateEmailAddressSetNewEmailAddressPageRoute(w http
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request email address update token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeUpdateEmailAddressSetNewEmailAddressPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1521,7 +1541,7 @@ func (server *serverStruct) updateEmailAddressVerifyNewEmailAddressPageRoute(w h
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeUpdateEmailAddressVerifyNewEmailAddressPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1536,7 +1556,7 @@ func (server *serverStruct) updateEmailAddressVerifyNewEmailAddressPageRoute(w h
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request email address update token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeUpdateEmailAddressVerifyNewEmailAddressPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1562,7 +1582,7 @@ func (server *serverStruct) updateEmailAddressVerifyNewEmailAddressPageRoute(w h
 
 	if !emailAddressUpdate.newEmailAddressVerificationCodeDefined {
 		errorMessage := "new email address verification code not defined"
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeUpdateEmailAddressVerifyNewEmailAddressPage, errorMessage)
 
 		server.setBlankEmailAddressUpdateTokenCookie(w)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
@@ -1585,7 +1605,7 @@ func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.Respons
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1600,7 +1620,7 @@ func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.Respons
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request passkey registration token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1623,9 +1643,27 @@ func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.Respons
 		w.WriteHeader(303)
 		return
 	}
-	if passkeyRegistration.passkeySignatureAlgorithmDefined || passkeyRegistration.passkeyPublicKeyDefined || passkeyRegistration.passkeyWebauthnAuthenticatorIdDefined {
-		errorMessage := "passkey registration webauthn credential partially set"
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+	if passkeyRegistration.passkeySignatureAlgorithmDefined {
+		errorMessage := "passkey registration passkey signature defined"
+		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
+
+		server.setBlankPasskeyRegistrationTokenCookie(w)
+		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
+		writePageHTMLResponse(w, 500, pageHTML)
+		return
+	}
+	if passkeyRegistration.passkeyPublicKeyDefined {
+		errorMessage := "passkey registration passkey public key defined"
+		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
+
+		server.setBlankPasskeyRegistrationTokenCookie(w)
+		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
+		writePageHTMLResponse(w, 500, pageHTML)
+		return
+	}
+	if passkeyRegistration.passkeyWebauthnAuthenticatorIdDefined {
+		errorMessage := "passkey registration passkey webauthn authenticator id defined"
+		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
 
 		server.setBlankPasskeyRegistrationTokenCookie(w)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
@@ -1643,7 +1681,7 @@ func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.Respons
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1652,7 +1690,7 @@ func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.Respons
 	passkeys, err := server.getUserPasskeys(user.id)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user passkeys: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1673,7 +1711,7 @@ func (server *serverStruct) registerPasskeySetPasskeyNamePageRoute(w http.Respon
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeyCreatePasskeyPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1688,7 +1726,7 @@ func (server *serverStruct) registerPasskeySetPasskeyNamePageRoute(w http.Respon
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request passkey registration token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeyCreatePasskeyPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1711,9 +1749,27 @@ func (server *serverStruct) registerPasskeySetPasskeyNamePageRoute(w http.Respon
 		w.WriteHeader(303)
 		return
 	}
-	if !passkeyRegistration.passkeySignatureAlgorithmDefined || !passkeyRegistration.passkeyPublicKeyDefined || !passkeyRegistration.passkeyWebauthnAuthenticatorIdDefined {
-		errorMessage := "passkey registration webauthn credential partially not set"
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+	if !passkeyRegistration.passkeySignatureAlgorithmDefined {
+		errorMessage := "passkey registration passkey signature algorithm not defined"
+		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeyCreatePasskeyPage, errorMessage)
+
+		server.setBlankPasskeyRegistrationTokenCookie(w)
+		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
+		writePageHTMLResponse(w, 500, pageHTML)
+		return
+	}
+	if !passkeyRegistration.passkeyPublicKeyDefined {
+		errorMessage := "passkey registration passkey public key not defined"
+		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeyCreatePasskeyPage, errorMessage)
+
+		server.setBlankPasskeyRegistrationTokenCookie(w)
+		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
+		writePageHTMLResponse(w, 500, pageHTML)
+		return
+	}
+	if !passkeyRegistration.passkeyWebauthnAuthenticatorIdDefined {
+		errorMessage := "passkey registration passkey webauthn authenticator id not defined"
+		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeyCreatePasskeyPage, errorMessage)
 
 		server.setBlankPasskeyRegistrationTokenCookie(w)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
@@ -1741,7 +1797,7 @@ func (server *serverStruct) deletePasskeyConfirmPageRoute(w http.ResponseWriter,
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeySetPasskeyNamePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1756,7 +1812,7 @@ func (server *serverStruct) deletePasskeyConfirmPageRoute(w http.ResponseWriter,
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request passkey deletion token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeySetPasskeyNamePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1783,7 +1839,7 @@ func (server *serverStruct) deletePasskeyConfirmPageRoute(w http.ResponseWriter,
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get passkey: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeySetPasskeyNamePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1804,7 +1860,7 @@ func (server *serverStruct) deleteAccountConfirmPageRoute(w http.ResponseWriter,
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeDeletePasskeyConfirmPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1819,7 +1875,7 @@ func (server *serverStruct) deleteAccountConfirmPageRoute(w http.ResponseWriter,
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate request account deletion token: %s", err.Error())
-		server.logRequestError(requestId, clientIPAddress, errorMessage)
+		server.logRouteInternalError(requestId, clientIPAddress, routeDeletePasskeyConfirmPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return

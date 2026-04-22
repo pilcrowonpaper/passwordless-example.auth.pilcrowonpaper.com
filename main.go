@@ -45,7 +45,7 @@ func main() {
 	awsSESEmailAddressEnvValue := os.Getenv("AWS_SES_EMAIL_ADDRESS")
 	logsEnvValue := os.Getenv("LOGS")
 	if logsEnvValue == "" {
-		logsEnvValue = "action_error,background_job"
+		logsEnvValue = "internal_error,background_job"
 	}
 
 	port, err := parseNonNegativeIntegerString(portString)
@@ -83,8 +83,8 @@ func main() {
 	serverLogging := serverLoggingStruct{}
 	logsEnvValues := strings.SplitSeq(logsEnvValue, ",")
 	for logsEnvValue := range logsEnvValues {
-		if logsEnvValue == "request_error" {
-			serverLogging.requestError = true
+		if logsEnvValue == "internal_error" {
+			serverLogging.internalError = true
 		} else if logsEnvValue == "background_job" {
 			serverLogging.backgroundJob = true
 		} else if logsEnvValue == "action_result" {

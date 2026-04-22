@@ -47,7 +47,7 @@ func (server *serverStruct) getWebauthnAuthenticatorName(authenticatorId []byte)
 }
 
 type serverLoggingStruct struct {
-	requestError  bool
+	internalError bool
 	backgroundJob bool
 	actionResult  bool
 	requestEmail  bool
