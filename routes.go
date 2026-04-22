@@ -36,6 +36,12 @@ const (
 )
 
 func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
+	secFetchSite := r.Header.Get("Sec-Fetch-Site")
+	if secFetchSite != "same-origin" {
+		w.WriteHeader(403)
+		return
+	}
+
 	contentTypeHeader := r.Header.Get("Content-Type")
 	if contentTypeHeader != "" {
 		mediaType, mediaTypeParameters, err := mime.ParseMediaType(contentTypeHeader)
