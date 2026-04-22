@@ -33,7 +33,7 @@ func main() {
 	}
 	port, err := parseNonNegativeIntegerString(portString)
 	if err != nil {
-		log.Fatalf("invalid PORT environment variable: %s", err.Error())
+		log.Fatalf("invalid PORT environment variable value: %s", err.Error())
 	}
 
 	originEnvValue := os.Getenv("ORIGIN")
@@ -44,6 +44,14 @@ func main() {
 	awsSESEnvValue := os.Getenv("AWS_SES")
 	if awsSESEnvValue == "" {
 		awsSESEnvValue = "0"
+	}
+	var awsSESEnabled bool
+	if awsSESEnvValue == "1" {
+		awsSESEnabled = true
+	} else if awsSESEnvValue == "0" {
+		awsSESEnabled = false
+	} else {
+		log.Fatalf("invalid AWS_SES environment variable value: %s", err.Error())
 	}
 
 	awsAccessKeyEnvValue := os.Getenv("AWS_ACCESS_KEY_ID")
@@ -70,7 +78,7 @@ func main() {
 	}
 
 	var emailClient emailClientInterface
-	if awsSESEnvValue == "1" {
+	if awsSESEnabled {
 		staticProvider := credentials.NewStaticCredentialsProvider(awsAccessKeyEnvValue, awsSecretAccessKeyEnvValue, "")
 
 		cfg, err := config.LoadDefaultConfig(context.Background(),
