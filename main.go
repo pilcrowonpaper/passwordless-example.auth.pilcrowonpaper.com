@@ -83,8 +83,8 @@ func main() {
 	serverLogging := serverLoggingStruct{}
 	logsEnvValues := strings.SplitSeq(logsEnvValue, ",")
 	for logsEnvValue := range logsEnvValues {
-		if logsEnvValue == "action_error" {
-			serverLogging.actionError = true
+		if logsEnvValue == "request_error" {
+			serverLogging.requestError = true
 		} else if logsEnvValue == "background_job" {
 			serverLogging.backgroundJob = true
 		} else if logsEnvValue == "action_result" {

@@ -62,7 +62,7 @@ const (
 	actionConfirmAccountDeletion = "confirm_account_deletion"
 )
 
-func (server *serverStruct) startSignupAction(requestId string, emailAddress string) (string, string) {
+func (server *serverStruct) startSignupAction(requestId string, clientIPAddress string, emailAddress string) (string, string) {
 	const (
 		errorCodeInvalidEmailAddress     = "invalid_email_address"
 		errorCodeEmailAddressAlreadyUsed = "email_address_already_used"
@@ -78,7 +78,7 @@ func (server *serverStruct) startSignupAction(requestId string, emailAddress str
 	emailAddressAvailable, err := server.checkUserEmailAddressAvailability(emailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check user email address availability: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 	if !emailAddressAvailable {
@@ -93,27 +93,27 @@ func (server *serverStruct) startSignupAction(requestId string, emailAddress str
 	signup, signupSecret, err := server.createSignup(emailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create signup: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logSignupStartedRequestEvent(requestId, signup.id, signup.emailAddress)
+	server.logSignupStartedRequestEvent(requestId, clientIPAddress, signup.id, signup.emailAddress)
 
 	err = server.sendSignupEmailAddressVerificationCodeEmail(signup.emailAddress, signup.emailAddressVerificationCode)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send signup email address verification code email: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logRequestEmail(requestId, signup.emailAddress, emailTypeSignupEmailAddressVerificationCode)
+	server.logRequestEmail(requestId, clientIPAddress, signup.emailAddress, emailTypeSignupEmailAddressVerificationCode)
 
 	signupToken := createSessionToken(signup.id, signupSecret)
 
 	return signupToken, ""
 }
 
-func (server *serverStruct) cancelSignupAction(requestId string, signupToken string) string {
+func (server *serverStruct) cancelSignupAction(requestId string, clientIPAddress string, signupToken string) string {
 	const (
 		errorCodeInvalidSignupToken = "invalid_signup_token"
 		errorCodeConflict           = "conflict"
@@ -126,7 +126,7 @@ func (server *serverStruct) cancelSignupAction(requestId string, signupToken str
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -136,14 +136,14 @@ func (server *serverStruct) cancelSignupAction(requestId string, signupToken str
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to delete signup: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
 	return ""
 }
 
-func (server *serverStruct) sendSignupEmailAddressVerificationCodeAction(requestId string, signupToken string) string {
+func (server *serverStruct) sendSignupEmailAddressVerificationCodeAction(requestId string, clientIPAddress string, signupToken string) string {
 	const (
 		errorCodeInvalidSignupToken          = "invalid_signup_token"
 		errorCodeEmailAddressAlreadyVerified = "email_address_already_verified"
@@ -157,7 +157,7 @@ func (server *serverStruct) sendSignupEmailAddressVerificationCodeAction(request
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -173,16 +173,16 @@ func (server *serverStruct) sendSignupEmailAddressVerificationCodeAction(request
 	err = server.sendSignupEmailAddressVerificationCodeEmail(signup.emailAddress, signup.emailAddressVerificationCode)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send signup email address verification code email: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
-	server.logRequestEmail(requestId, signup.emailAddress, emailTypeSignupEmailAddressVerificationCode)
+	server.logRequestEmail(requestId, clientIPAddress, signup.emailAddress, emailTypeSignupEmailAddressVerificationCode)
 
 	return ""
 }
 
-func (server *serverStruct) verifySignupEmailAddressVerificationCodeAction(requestId string, signupToken string, verificationCode string) string {
+func (server *serverStruct) verifySignupEmailAddressVerificationCodeAction(requestId string, clientIPAddress string, signupToken string, verificationCode string) string {
 	const (
 		errorCodeInvalidSignupToken          = "invalid_signup_token"
 		errorCodeEmailAddressAlreadyVerified = "email_address_already_verified"
@@ -197,7 +197,7 @@ func (server *serverStruct) verifySignupEmailAddressVerificationCodeAction(reque
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -212,23 +212,23 @@ func (server *serverStruct) verifySignupEmailAddressVerificationCodeAction(reque
 
 	emailAddressVerificationCodeValid := signup.compareEmailAddressVerificationCode(verificationCode)
 	if !emailAddressVerificationCodeValid {
-		server.logSignupEmailAddressVerificationFailedRequestEvent(requestId, signup.id, signup.emailAddress)
+		server.logSignupEmailAddressVerificationFailedRequestEvent(requestId, clientIPAddress, signup.id, signup.emailAddress)
 		return errorCodeIncorrectVerificationCode
 	}
 
 	err = server.setSignupAsEmailAddressVerified(signup.id)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to set signup as email address verified: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
-	server.logSignupEmailAddressVerifiedRequestEvent(requestId, signup.id, signup.emailAddress)
+	server.logSignupEmailAddressVerifiedRequestEvent(requestId, clientIPAddress, signup.id, signup.emailAddress)
 
 	return ""
 }
 
-func (server *serverStruct) completeSignupWithoutPasskeyRegistrationAction(requestId string, signupToken string) (string, string) {
+func (server *serverStruct) completeSignupWithoutPasskeyRegistrationAction(requestId string, clientIPAddress string, signupToken string) (string, string) {
 	const (
 		errorCodeInvalidSignupToken           = "invalid_signup_token"
 		errorCodeEmailAddressNotVerified      = "email_address_not_verified"
@@ -243,7 +243,7 @@ func (server *serverStruct) completeSignupWithoutPasskeyRegistrationAction(reque
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -257,7 +257,7 @@ func (server *serverStruct) completeSignupWithoutPasskeyRegistrationAction(reque
 	emailAddressAvailable, err := server.checkUserEmailAddressAvailability(signup.emailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check user email address availability: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 	if !emailAddressAvailable {
@@ -270,11 +270,11 @@ func (server *serverStruct) completeSignupWithoutPasskeyRegistrationAction(reque
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to complete signup: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logSignupCompletedWithoutPasskeyRegistrationRequestEvent(requestId, signup.id, signup.emailAddress, user.id, session.id)
+	server.logSignupCompletedWithoutPasskeyRegistrationRequestEvent(requestId, clientIPAddress, signup.id, signup.emailAddress, user.id, session.id)
 
 	sessionToken := createSessionToken(session.id, sessionSecret)
 
@@ -283,6 +283,7 @@ func (server *serverStruct) completeSignupWithoutPasskeyRegistrationAction(reque
 
 func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
 	requestId string,
+	clientIPAddress string,
 	signupToken string,
 	passkeyWebauthnCredentialId []byte,
 	passkeySignatureAlgorithm string,
@@ -308,7 +309,7 @@ func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -321,17 +322,17 @@ func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
 
 	if signup.passkeySignatureAlgorithmDefined {
 		errorMessage := "signup passkey signature algorithm defined"
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if signup.passkeyPublicKeyDefined {
 		errorMessage := "signup passkey public key defined"
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if signup.passkeyWebauthnAuthenticatorIdDefined {
 		errorMessage := "signup passkey webauthn authenticator id defined"
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -347,7 +348,7 @@ func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
 	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(passkeyWebauthnCredentialId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if !webauthnCredentialIdAvailable {
@@ -386,14 +387,14 @@ func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create signup passkey registration: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
 	return ""
 }
 
-func (server *serverStruct) setSignupPasskeyNameAction(requestId string, signupToken string, passkeyName string) (string, string) {
+func (server *serverStruct) setSignupPasskeyNameAction(requestId string, clientIPAddress string, signupToken string, passkeyName string) (string, string) {
 	const (
 		errorCodeInvalidSignupToken              = "invalid_signup_token"
 		errorCodeEmailAddressNotVerified         = "email_address_not_verified"
@@ -411,7 +412,7 @@ func (server *serverStruct) setSignupPasskeyNameAction(requestId string, signupT
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate signup token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -424,17 +425,17 @@ func (server *serverStruct) setSignupPasskeyNameAction(requestId string, signupT
 
 	if !signup.passkeySignatureAlgorithmDefined {
 		errorMessage := "signup passkey signature algorithm not defined"
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 	if !signup.passkeyPublicKeyDefined {
 		errorMessage := "signup passkey public key not defined"
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 	if !signup.passkeyWebauthnAuthenticatorIdDefined {
 		errorMessage := "signup passkey webauthn authenticator id not defined"
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -446,7 +447,7 @@ func (server *serverStruct) setSignupPasskeyNameAction(requestId string, signupT
 	emailAddressAvailable, err := server.checkUserEmailAddressAvailability(signup.emailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check user email address availability: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 	if !emailAddressAvailable {
@@ -456,7 +457,7 @@ func (server *serverStruct) setSignupPasskeyNameAction(requestId string, signupT
 	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(signup.passkeyWebauthnCredentialId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 	if !webauthnCredentialIdAvailable {
@@ -469,18 +470,18 @@ func (server *serverStruct) setSignupPasskeyNameAction(requestId string, signupT
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to complete signup with passkey registration: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logSignupCompletedWithPasskeyRegistrationRequestEvent(requestId, signup.id, signup.emailAddress, user.id, passkey.id, session.id)
+	server.logSignupCompletedWithPasskeyRegistrationRequestEvent(requestId, clientIPAddress, signup.id, signup.emailAddress, user.id, passkey.id, session.id)
 
 	sessionToken := createSessionToken(session.id, sessionSecret)
 
 	return sessionToken, ""
 }
 
-func (server *serverStruct) startPasskeySigninAction(requestId string) (string, []byte, string) {
+func (server *serverStruct) startPasskeySigninAction(requestId string, clientIPAddress string) (string, []byte, string) {
 	const (
 		errorCodeInvalidEmailAddress = "invalid_email_address"
 		errorCodeUnexpectedError     = "unexpected_error"
@@ -489,16 +490,16 @@ func (server *serverStruct) startPasskeySigninAction(requestId string) (string, 
 	passkeySignin, err := server.createPasskeySignin()
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create passkey signin: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", nil, errorCodeUnexpectedError
 	}
 
-	server.logPasskeySigninStartedRequestEvent(requestId, passkeySignin.id)
+	server.logPasskeySigninStartedRequestEvent(requestId, clientIPAddress, passkeySignin.id)
 
 	return passkeySignin.id, passkeySignin.challenge, ""
 }
 
-func (server *serverStruct) cancelPasskeySigninAction(requestId string, passkeySigninToken string) string {
+func (server *serverStruct) cancelPasskeySigninAction(requestId string, clientIPAddress string, passkeySigninToken string) string {
 	const (
 		errorCodePasskeySigninNotFound = "passkey_signin_not_found"
 		errorCodeConflict              = "conflict"
@@ -511,7 +512,7 @@ func (server *serverStruct) cancelPasskeySigninAction(requestId string, passkeyS
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate passkey sign in token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -521,7 +522,7 @@ func (server *serverStruct) cancelPasskeySigninAction(requestId string, passkeyS
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to complete passkey signin: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -530,6 +531,7 @@ func (server *serverStruct) cancelPasskeySigninAction(requestId string, passkeyS
 
 func (server *serverStruct) verifyPasskeySigninWebauthnSignatureAction(
 	requestId string,
+	clientIPAddress string,
 	passkeySigninId string,
 	webauthnCredentialId []byte,
 	webauthnAuthenticatorData []byte,
@@ -552,7 +554,7 @@ func (server *serverStruct) verifyPasskeySigninWebauthnSignatureAction(
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate passkey sign in token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -562,7 +564,7 @@ func (server *serverStruct) verifyPasskeySigninWebauthnSignatureAction(
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get passkey by webauthn credential id: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -605,7 +607,7 @@ func (server *serverStruct) verifyPasskeySigninWebauthnSignatureAction(
 		ecdsaPublicKey, err := parseECDSASEC1CompressedPublicKey(elliptic.P256(), passkey.publicKey)
 		if err != nil {
 			errorMessage := fmt.Sprintf("failed to parse ecdsa compressed sec1 public key: %s", err.Error())
-			server.logActionError(requestId, errorMessage)
+			server.logRequestError(requestId, clientIPAddress, errorMessage)
 			return "", errorCodeUnexpectedError
 		}
 
@@ -615,7 +617,7 @@ func (server *serverStruct) verifyPasskeySigninWebauthnSignatureAction(
 		rsaPublicKey, err := x509.ParsePKCS1PublicKey(passkey.publicKey)
 		if err != nil {
 			errorMessage := fmt.Sprintf("failed to rsa pkcs1 public key: %s", err.Error())
-			server.logActionError(requestId, errorMessage)
+			server.logRequestError(requestId, clientIPAddress, errorMessage)
 			return "", errorCodeUnexpectedError
 		}
 
@@ -624,12 +626,12 @@ func (server *serverStruct) verifyPasskeySigninWebauthnSignatureAction(
 		signatureValid = err == nil
 	} else {
 		errorMessage := fmt.Sprintf("unknown public key algorithm '%s'", passkey.signatureAlgorithm)
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
 	if !signatureValid {
-		server.logPasskeySigninSignatureVerificationFailedRequestEvent(requestId, passkeySignin.id, passkey.id, passkey.userId)
+		server.logPasskeySigninSignatureVerificationFailedRequestEvent(requestId, clientIPAddress, passkeySignin.id, passkey.id, passkey.userId)
 
 		return "", errorCodeInvalidWebauthnSignature
 	}
@@ -640,34 +642,34 @@ func (server *serverStruct) verifyPasskeySigninWebauthnSignatureAction(
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to complete passkey signin: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logPasskeySigninCompletedRequestEvent(requestId, passkeySignin.id, passkey.id, passkey.userId, session.id)
+	server.logPasskeySigninCompletedRequestEvent(requestId, clientIPAddress, passkeySignin.id, passkey.id, passkey.userId, session.id)
 
 	user, err := server.getUser(session.userId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
 	err = server.sendSignedInNotificationEmail(user.emailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send signed in email: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logRequestEmail(requestId, user.emailAddress, emailTypeSignedInNotification)
+	server.logRequestEmail(requestId, clientIPAddress, user.emailAddress, emailTypeSignedInNotification)
 
 	sessionToken := createSessionToken(session.id, sessionSecret)
 
 	return sessionToken, ""
 }
 
-func (server *serverStruct) startEmailCodeSigninAction(requestId string, emailAddress string) (string, string) {
+func (server *serverStruct) startEmailCodeSigninAction(requestId string, clientIPAddress string, emailAddress string) (string, string) {
 	const (
 		errorCodeInvalidEmailAddress = "invalid_email_address"
 		errorCodeUserNotFound        = "user_not_found"
@@ -686,7 +688,7 @@ func (server *serverStruct) startEmailCodeSigninAction(requestId string, emailAd
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user by email address: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -698,27 +700,27 @@ func (server *serverStruct) startEmailCodeSigninAction(requestId string, emailAd
 	emailCodeSignin, emailCodeSigninSecret, emailCode, err := server.createEmailCodeSignin(user.id, user.emailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create signin: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logEmailCodeSigninStartedRequestEvent(requestId, emailCodeSignin.id, emailCodeSignin.userId, user.emailAddress)
+	server.logEmailCodeSigninStartedRequestEvent(requestId, clientIPAddress, emailCodeSignin.id, emailCodeSignin.userId, user.emailAddress)
 
 	err = server.sendSigninEmailCode(user.emailAddress, emailCode)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send signin email code: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logRequestEmail(requestId, user.emailAddress, emailTypeSigninEmailCode)
+	server.logRequestEmail(requestId, clientIPAddress, user.emailAddress, emailTypeSigninEmailCode)
 
 	sessionToken := createSessionToken(emailCodeSignin.id, emailCodeSigninSecret)
 
 	return sessionToken, ""
 }
 
-func (server *serverStruct) cancelEmailCodeSigninAction(requestId string, emailCodeSigninToken string) string {
+func (server *serverStruct) cancelEmailCodeSigninAction(requestId string, clientIPAddress string, emailCodeSigninToken string) string {
 	const (
 		errorCodeInvalidEmailCodeSigninToken = "invalid_email_code_signin_token"
 		errorCodeConflict                    = "conflict"
@@ -731,7 +733,7 @@ func (server *serverStruct) cancelEmailCodeSigninAction(requestId string, emailC
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate email code signin token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -741,14 +743,14 @@ func (server *serverStruct) cancelEmailCodeSigninAction(requestId string, emailC
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to delete email code signin: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
 	return ""
 }
 
-func (server *serverStruct) verifyEmailCodeSigninEmailCodeAction(requestId string, emailCodeSigninToken string, emailCode string) (string, string) {
+func (server *serverStruct) verifyEmailCodeSigninEmailCodeAction(requestId string, clientIPAddress string, emailCodeSigninToken string, emailCode string) (string, string) {
 	const (
 		errorCodeInvalidEmailCodeSigninToken = "invalid_email_code_signin_token"
 		errorCodeIncorrectEmailCode          = "incorrect_email_code"
@@ -763,7 +765,7 @@ func (server *serverStruct) verifyEmailCodeSigninEmailCodeAction(requestId strin
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate email code signin token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -775,7 +777,7 @@ func (server *serverStruct) verifyEmailCodeSigninEmailCodeAction(requestId strin
 	emailCodeHash := server.hashEmailCode(emailCode, emailCodeSignin.emailCodeSalt)
 	emailCodeCorrect := constantTimeCompare(emailCodeSignin.emailCodeHash, emailCodeHash)
 	if !emailCodeCorrect {
-		server.logEmailCodeSigninEmailCodeVerificationFailedRequestEvent(requestId, emailCodeSignin.id, emailCodeSignin.userId, emailCodeSignin.emailAddress)
+		server.logEmailCodeSigninEmailCodeVerificationFailedRequestEvent(requestId, clientIPAddress, emailCodeSignin.id, emailCodeSignin.userId, emailCodeSignin.emailAddress)
 		return "", errorCodeIncorrectEmailCode
 	}
 
@@ -785,27 +787,27 @@ func (server *serverStruct) verifyEmailCodeSigninEmailCodeAction(requestId strin
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to complete email code signin: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logEmailCodeSigninCompletedRequestEvent(requestId, emailCodeSignin.id, emailCodeSignin.userId, emailCodeSignin.emailAddress, session.id)
+	server.logEmailCodeSigninCompletedRequestEvent(requestId, clientIPAddress, emailCodeSignin.id, emailCodeSignin.userId, emailCodeSignin.emailAddress, session.id)
 
 	err = server.sendSignedInNotificationEmail(emailCodeSignin.emailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send signed in email: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logRequestEmail(requestId, emailCodeSignin.emailAddress, emailTypeSignedInNotification)
+	server.logRequestEmail(requestId, clientIPAddress, emailCodeSignin.emailAddress, emailTypeSignedInNotification)
 
 	sessionToken := createSessionToken(session.id, sessionSecret)
 
 	return sessionToken, ""
 }
 
-func (server *serverStruct) signOutAction(requestId string, sessionToken string) string {
+func (server *serverStruct) signOutAction(requestId string, clientIPAddress string, sessionToken string) string {
 	const (
 		errorCodeInvalidSessionToken = "invalid_session_token"
 		errorCodeConflict            = "conflict"
@@ -818,7 +820,7 @@ func (server *serverStruct) signOutAction(requestId string, sessionToken string)
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -828,14 +830,14 @@ func (server *serverStruct) signOutAction(requestId string, sessionToken string)
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to delete session: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
 	return ""
 }
 
-func (server *serverStruct) signOutAllDevices(requestId string, sessionToken string) string {
+func (server *serverStruct) signOutAllDevicesAction(requestId string, clientIPAddress string, sessionToken string) string {
 	const (
 		errorCodeInvalidSessionToken = "invalid_session_token"
 		errorCodeConflict            = "conflict"
@@ -848,7 +850,7 @@ func (server *serverStruct) signOutAllDevices(requestId string, sessionToken str
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -858,14 +860,14 @@ func (server *serverStruct) signOutAllDevices(requestId string, sessionToken str
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to delete user sessions: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
 	return ""
 }
 
-func (server *serverStruct) cancelIdentityVerificationAction(requestId string, sessionToken string, identityVerificationToken string) (string, string) {
+func (server *serverStruct) cancelIdentityVerificationAction(requestId string, clientIPAddress string, sessionToken string, identityVerificationToken string) (string, string) {
 	const (
 		errorCodeInvalidSessionToken              = "invalid_session_token"
 		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification"
@@ -880,7 +882,7 @@ func (server *serverStruct) cancelIdentityVerificationAction(requestId string, s
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -890,7 +892,7 @@ func (server *serverStruct) cancelIdentityVerificationAction(requestId string, s
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate identity verification token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -905,7 +907,7 @@ func (server *serverStruct) cancelIdentityVerificationAction(requestId string, s
 		}
 		if err != nil {
 			errorMessage := fmt.Sprintf("failed to delete email address update: %s", err.Error())
-			server.logActionError(requestId, errorMessage)
+			server.logRequestError(requestId, clientIPAddress, errorMessage)
 			return "", errorCodeUnexpectedError
 		}
 	} else if identityVerification.verifyingAction == identityVerificationVerifyingActionPasskeyRegistration {
@@ -915,7 +917,7 @@ func (server *serverStruct) cancelIdentityVerificationAction(requestId string, s
 		}
 		if err != nil {
 			errorMessage := fmt.Sprintf("failed to delete passkey registration: %s", err.Error())
-			server.logActionError(requestId, errorMessage)
+			server.logRequestError(requestId, clientIPAddress, errorMessage)
 			return "", errorCodeUnexpectedError
 		}
 	} else if identityVerification.verifyingAction == identityVerificationVerifyingActionPasskeyDeletion {
@@ -925,7 +927,7 @@ func (server *serverStruct) cancelIdentityVerificationAction(requestId string, s
 		}
 		if err != nil {
 			errorMessage := fmt.Sprintf("failed to delete passkey deletion: %s", err.Error())
-			server.logActionError(requestId, errorMessage)
+			server.logRequestError(requestId, clientIPAddress, errorMessage)
 			return "", errorCodeUnexpectedError
 		}
 	} else if identityVerification.verifyingAction == identityVerificationVerifyingActionAccountDeletion {
@@ -935,12 +937,12 @@ func (server *serverStruct) cancelIdentityVerificationAction(requestId string, s
 		}
 		if err != nil {
 			errorMessage := fmt.Sprintf("failed to delete account deletion: %s", err.Error())
-			server.logActionError(requestId, errorMessage)
+			server.logRequestError(requestId, clientIPAddress, errorMessage)
 			return "", errorCodeUnexpectedError
 		}
 	} else {
 		errorMessage := fmt.Sprintf("unknown identity verification verifying action '%s'", identityVerification.verifyingAction)
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -949,6 +951,7 @@ func (server *serverStruct) cancelIdentityVerificationAction(requestId string, s
 
 func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAction(
 	requestId string,
+	clientIPAddress string,
 	sessionToken string,
 	identityVerificationToken string,
 	webauthnCredentialId []byte,
@@ -976,7 +979,7 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -986,7 +989,7 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate identity verification token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -1000,7 +1003,7 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get passkey by webauthn credential id: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -1047,7 +1050,7 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 		ecdsaPublicKey, err := parseECDSASEC1CompressedPublicKey(elliptic.P256(), passkey.publicKey)
 		if err != nil {
 			errorMessage := fmt.Sprintf("failed to parse ecdsa compressed sec1 public key: %s", err.Error())
-			server.logActionError(requestId, errorMessage)
+			server.logRequestError(requestId, clientIPAddress, errorMessage)
 			return "", errorCodeUnexpectedError
 		}
 
@@ -1057,7 +1060,7 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 		rsaPublicKey, err := x509.ParsePKCS1PublicKey(passkey.publicKey)
 		if err != nil {
 			errorMessage := fmt.Sprintf("failed to rsa pkcs1 public key: %s", err.Error())
-			server.logActionError(requestId, errorMessage)
+			server.logRequestError(requestId, clientIPAddress, errorMessage)
 			return "", errorCodeUnexpectedError
 		}
 
@@ -1066,19 +1069,21 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 		signatureValid = err == nil
 	} else {
 		errorMessage := fmt.Sprintf("unknown public key algorithm '%s'", passkey.signatureAlgorithm)
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
 	if !signatureValid {
 		server.logIdentityVerificationPasskeyWebauthnSignatureVerificationFailedRequestEvent(
 			requestId,
+			clientIPAddress,
 			session.id,
 			session.userId,
 			identityVerification.id,
 			identityVerification.verifyingAction,
 			identityVerification.verifyingActionId,
-			passkey.id)
+			passkey.id,
+		)
 
 		return "", errorCodeInvalidWebauthnSignature
 	}
@@ -1089,16 +1094,16 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to complete email address update identity verification: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
-	server.logIdentityVerificationPasskeyVerificationCompletedRequestEvent(requestId, session.id, session.userId, identityVerification.id, identityVerification.verifyingAction, identityVerification.verifyingActionId, passkey.id)
+	server.logIdentityVerificationPasskeyVerificationCompletedRequestEvent(requestId, clientIPAddress, session.id, session.userId, identityVerification.id, identityVerification.verifyingAction, identityVerification.verifyingActionId, passkey.id)
 
 	return identityVerification.verifyingAction, ""
 }
 
-func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId string, sessionToken string, identityVerificationToken string) string {
+func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId string, clientIPAddress string, sessionToken string, identityVerificationToken string) string {
 	const (
 		errorCodeInvalidSessionToken              = "invalid_session_token"
 		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification"
@@ -1113,7 +1118,7 @@ func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId s
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1123,7 +1128,7 @@ func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId s
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate identity verification token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1137,7 +1142,7 @@ func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId s
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1147,12 +1152,13 @@ func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId s
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create identity verification email code verification: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
 	server.logIdentityVerificationEmailCodeIssuedRequestEvent(
 		requestId,
+		clientIPAddress,
 		session.id,
 		session.userId,
 		identityVerification.id,
@@ -1164,16 +1170,16 @@ func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId s
 	err = server.sendIdentityVerificationEmailCode(user.emailAddress, emailCode)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send identity verification email code: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
-	server.logRequestEmail(requestId, user.emailAddress, emailTypeIdentityVerificationEmailCode)
+	server.logRequestEmail(requestId, clientIPAddress, user.emailAddress, emailTypeIdentityVerificationEmailCode)
 
 	return ""
 }
 
-func (server *serverStruct) revokeIdentityVerificationEmailCodeAction(requestId string, sessionToken string, identityVerificationToken string) string {
+func (server *serverStruct) revokeIdentityVerificationEmailCodeAction(requestId string, clientIPAddress string, sessionToken string, identityVerificationToken string) string {
 	const (
 		errorCodeInvalidSessionToken              = "invalid_session_token"
 		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification"
@@ -1190,7 +1196,7 @@ func (server *serverStruct) revokeIdentityVerificationEmailCodeAction(requestId 
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1200,7 +1206,7 @@ func (server *serverStruct) revokeIdentityVerificationEmailCodeAction(requestId 
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate identity verification token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1218,14 +1224,14 @@ func (server *serverStruct) revokeIdentityVerificationEmailCodeAction(requestId 
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to revoke identity verification email code: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
 	return ""
 }
 
-func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId string, sessionToken string, identityVerificationToken string, emailCode string) (string, string) {
+func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId string, clientIPAddress string, sessionToken string, identityVerificationToken string, emailCode string) (string, string) {
 	const (
 		errorCodeInvalidSessionToken              = "invalid_session_token"
 		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification"
@@ -1243,7 +1249,7 @@ func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId 
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -1253,7 +1259,7 @@ func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId 
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate identity verification token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -1267,12 +1273,12 @@ func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId 
 
 	if !identityVerification.emailCodeHashDefined {
 		errorMessage := "identity verification email code hash not defined"
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 	if !identityVerification.emailCodeSaltDefined {
 		errorMessage := "identity verification email code salt not defined"
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
@@ -1286,6 +1292,7 @@ func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId 
 	if !emailCodeCorrect {
 		server.logIdentityVerificationEmailCodeVerificationFailedRequestEvent(
 			requestId,
+			clientIPAddress,
 			session.id,
 			session.userId,
 			identityVerification.id,
@@ -1302,12 +1309,13 @@ func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId 
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to complete email address update identity verification: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
 
 	server.logIdentityVerificationEmailCodeVerificationCompletedRequestEvent(
 		requestId,
+		clientIPAddress,
 		session.id,
 		session.userId,
 		identityVerification.id,
@@ -1319,7 +1327,7 @@ func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId 
 	return identityVerification.verifyingAction, ""
 }
 
-func (server *serverStruct) startEmailAddressUpdateAction(requestId string, sessionToken string) (string, string, string) {
+func (server *serverStruct) startEmailAddressUpdateAction(requestId string, clientIPAddress string, sessionToken string) (string, string, string) {
 	const (
 		errorCodeInvalidSessionToken = "invalid_session_token"
 		errorCodeConflict            = "conflict"
@@ -1332,7 +1340,7 @@ func (server *serverStruct) startEmailAddressUpdateAction(requestId string, sess
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", "", errorCodeUnexpectedError
 	}
 
@@ -1342,11 +1350,11 @@ func (server *serverStruct) startEmailAddressUpdateAction(requestId string, sess
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create email address update: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", "", errorCodeUnexpectedError
 	}
 
-	server.logEmailAddressUpdateStartedRequestEvent(requestId, session.id, session.userId, emailAddressUpdate.id, identityVerification.id)
+	server.logEmailAddressUpdateStartedRequestEvent(requestId, clientIPAddress, session.id, session.userId, emailAddressUpdate.id, identityVerification.id)
 
 	emailAddressUpdateToken := createSessionToken(emailAddressUpdate.id, emailAddressUpdateSecret)
 	identityVerificationToken := createSessionToken(identityVerification.id, identityVerificationSecret)
@@ -1354,7 +1362,7 @@ func (server *serverStruct) startEmailAddressUpdateAction(requestId string, sess
 	return emailAddressUpdateToken, identityVerificationToken, ""
 }
 
-func (server *serverStruct) cancelEmailAddressUpdateAction(requestId string, sessionToken string, emailAddressUpdateToken string) string {
+func (server *serverStruct) cancelEmailAddressUpdateAction(requestId string, clientIPAddress string, sessionToken string, emailAddressUpdateToken string) string {
 	const (
 		errorCodeInvalidSessionToken            = "invalid_session_token"
 		errorCodeInvalidEmailAddressUpdateToken = "invalid_email_address_update_token"
@@ -1369,7 +1377,7 @@ func (server *serverStruct) cancelEmailAddressUpdateAction(requestId string, ses
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1379,7 +1387,7 @@ func (server *serverStruct) cancelEmailAddressUpdateAction(requestId string, ses
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get email address update: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1393,14 +1401,14 @@ func (server *serverStruct) cancelEmailAddressUpdateAction(requestId string, ses
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to delete email address update: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
 	return ""
 }
 
-func (server *serverStruct) setEmailAddressUpdateNewEmailAddressAction(requestId string, sessionToken string, emailAddressUpdateToken string, newEmailAddress string) string {
+func (server *serverStruct) setEmailAddressUpdateNewEmailAddressAction(requestId string, clientIPAddress string, sessionToken string, emailAddressUpdateToken string, newEmailAddress string) string {
 	const (
 		errorCodeInvalidSessionToken            = "invalid_session_token"
 		errorCodeInvalidEmailAddressUpdateToken = "invalid_email_address_update_token"
@@ -1420,7 +1428,7 @@ func (server *serverStruct) setEmailAddressUpdateNewEmailAddressAction(requestId
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1430,7 +1438,7 @@ func (server *serverStruct) setEmailAddressUpdateNewEmailAddressAction(requestId
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get email address update: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if emailAddressUpdate.sessionId != session.id {
@@ -1451,7 +1459,7 @@ func (server *serverStruct) setEmailAddressUpdateNewEmailAddressAction(requestId
 	newEmailAddressAvailable, err := server.checkUserEmailAddressAvailability(newEmailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check user email address availability: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if !newEmailAddressAvailable {
@@ -1466,23 +1474,23 @@ func (server *serverStruct) setEmailAddressUpdateNewEmailAddressAction(requestId
 	newEmailAddressVerificationCode, err := server.setEmailAddressUpdateNewEmailAddress(emailAddressUpdate.id, newEmailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to set email address update new email address: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
 	err = server.sendEmailAddressUpdateNewEmailAddressVerificationCodeEmail(newEmailAddress, newEmailAddressVerificationCode)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send email address update new email address verification code email: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
-	server.logRequestEmail(requestId, newEmailAddress, emailTypeEmailAddressUpdateNewEmailAddressVerificationCode)
+	server.logRequestEmail(requestId, clientIPAddress, newEmailAddress, emailTypeEmailAddressUpdateNewEmailAddressVerificationCode)
 
 	return ""
 }
 
-func (server *serverStruct) sendEmailAddressUpdateNewEmailAddressVerificationCodeAction(requestId string, sessionToken string, emailAddressUpdateToken string) string {
+func (server *serverStruct) sendEmailAddressUpdateNewEmailAddressVerificationCodeAction(requestId string, clientIPAddress string, sessionToken string, emailAddressUpdateToken string) string {
 	const (
 		errorCodeInvalidSessionToken            = "invalid_session_token"
 		errorCodeInvalidEmailAddressUpdateToken = "invalid_email_address_update_token"
@@ -1501,7 +1509,7 @@ func (server *serverStruct) sendEmailAddressUpdateNewEmailAddressVerificationCod
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1511,7 +1519,7 @@ func (server *serverStruct) sendEmailAddressUpdateNewEmailAddressVerificationCod
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get email address update: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if emailAddressUpdate.sessionId != session.id {
@@ -1526,7 +1534,7 @@ func (server *serverStruct) sendEmailAddressUpdateNewEmailAddressVerificationCod
 	}
 	if !emailAddressUpdate.newEmailAddressVerificationCodeDefined {
 		errorMessage := "new email address verification code not defined"
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1538,16 +1546,16 @@ func (server *serverStruct) sendEmailAddressUpdateNewEmailAddressVerificationCod
 	err = server.sendEmailAddressUpdateNewEmailAddressVerificationCodeEmail(emailAddressUpdate.newEmailAddress, emailAddressUpdate.newEmailAddressVerificationCode)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send email address update new email address verification code email: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
-	server.logRequestEmail(requestId, emailAddressUpdate.newEmailAddress, emailTypeEmailAddressUpdateNewEmailAddressVerificationCode)
+	server.logRequestEmail(requestId, clientIPAddress, emailAddressUpdate.newEmailAddress, emailTypeEmailAddressUpdateNewEmailAddressVerificationCode)
 
 	return ""
 }
 
-func (server *serverStruct) verifyEmailAddressUpdateNewEmailAddressVerificationCodeAction(requestId string, sessionToken string, emailAddressUpdateToken string, verificationCode string) string {
+func (server *serverStruct) verifyEmailAddressUpdateNewEmailAddressVerificationCodeAction(requestId string, clientIPAddress string, sessionToken string, emailAddressUpdateToken string, verificationCode string) string {
 	const (
 		errorCodeInvalidSessionToken            = "invalid_session_token"
 		errorCodeInvalidEmailAddressUpdateToken = "invalid_email_address_update_token"
@@ -1567,7 +1575,7 @@ func (server *serverStruct) verifyEmailAddressUpdateNewEmailAddressVerificationC
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1577,7 +1585,7 @@ func (server *serverStruct) verifyEmailAddressUpdateNewEmailAddressVerificationC
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get email address update: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if emailAddressUpdate.sessionId != session.id {
@@ -1593,7 +1601,7 @@ func (server *serverStruct) verifyEmailAddressUpdateNewEmailAddressVerificationC
 
 	if !emailAddressUpdate.newEmailAddressVerificationCodeDefined {
 		errorMessage := "new email address verification code not defined"
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1604,14 +1612,14 @@ func (server *serverStruct) verifyEmailAddressUpdateNewEmailAddressVerificationC
 
 	verificationCodeCorrect := emailAddressUpdate.compareNewEmailAddressVerificationCode(verificationCode)
 	if !verificationCodeCorrect {
-		server.logEmailAddressUpdateNewEmailAddressVerificationFailedRequestEvent(requestId, session.id, session.userId, emailAddressUpdate.id, emailAddressUpdate.newEmailAddress)
+		server.logEmailAddressUpdateNewEmailAddressVerificationFailedRequestEvent(requestId, clientIPAddress, session.id, session.userId, emailAddressUpdate.id, emailAddressUpdate.newEmailAddress)
 		return errorCodeIncorrectVerificationCode
 	}
 
 	newEmailAddressAvailable, err := server.checkUserEmailAddressAvailability(emailAddressUpdate.newEmailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check user email address availability: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if !newEmailAddressAvailable {
@@ -1624,25 +1632,25 @@ func (server *serverStruct) verifyEmailAddressUpdateNewEmailAddressVerificationC
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to complete email address update: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
-	server.logEmailAddressUpdateCompletedRequestEvent(requestId, session.id, session.userId, emailAddressUpdate.id, emailAddressUpdate.newEmailAddress)
+	server.logEmailAddressUpdateCompletedRequestEvent(requestId, clientIPAddress, session.id, session.userId, emailAddressUpdate.id, emailAddressUpdate.newEmailAddress)
 
 	err = server.sendEmailAddressUpdatedNotificationEmail(oldUserEmailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send email address update email: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
-	server.logRequestEmail(requestId, oldUserEmailAddress, emailTypeEmailAddressUpdatedNotification)
+	server.logRequestEmail(requestId, clientIPAddress, oldUserEmailAddress, emailTypeEmailAddressUpdatedNotification)
 
 	return ""
 }
 
-func (server *serverStruct) startPasskeyRegistrationAction(requestId string, sessionToken string) (string, string, string) {
+func (server *serverStruct) startPasskeyRegistrationAction(requestId string, clientIPAddress string, sessionToken string) (string, string, string) {
 	const (
 		errorCodeInvalidSessionToken = "invalid_session_token"
 		errorCodePasskeyLimitReached = "passkey_limit_reached"
@@ -1656,14 +1664,14 @@ func (server *serverStruct) startPasskeyRegistrationAction(requestId string, ses
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", "", errorCodeUnexpectedError
 	}
 
 	userPasskeyCount, err := server.getUserPasskeyCount(session.userId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user passkey count: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", "", errorCodeUnexpectedError
 	}
 	if userPasskeyCount > maxPasskeyCountLimit {
@@ -1676,11 +1684,11 @@ func (server *serverStruct) startPasskeyRegistrationAction(requestId string, ses
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create passkey registration: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", "", errorCodeUnexpectedError
 	}
 
-	server.logPasskeyRegistrationStartedRequestEvent(requestId, session.id, session.userId, identityVerification.id, passkeyRegistration.id)
+	server.logPasskeyRegistrationStartedRequestEvent(requestId, clientIPAddress, session.id, session.userId, identityVerification.id, passkeyRegistration.id)
 
 	passkeyRegistrationToken := createSessionToken(passkeyRegistration.id, passkeyRegistrationSecret)
 	identityVerificationToken := createSessionToken(identityVerification.id, identityVerificationSecret)
@@ -1688,7 +1696,7 @@ func (server *serverStruct) startPasskeyRegistrationAction(requestId string, ses
 	return passkeyRegistrationToken, identityVerificationToken, ""
 }
 
-func (server *serverStruct) cancelPasskeyRegistrationAction(requestId string, sessionToken string, passkeyRegistrationToken string) string {
+func (server *serverStruct) cancelPasskeyRegistrationAction(requestId string, clientIPAddress string, sessionToken string, passkeyRegistrationToken string) string {
 	const (
 		errorCodeInvalidSessionToken             = "invalid_session_token"
 		errorCodeInvalidPasskeyRegistrationToken = "invalid_passkey_registration_token"
@@ -1703,7 +1711,7 @@ func (server *serverStruct) cancelPasskeyRegistrationAction(requestId string, se
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1713,7 +1721,7 @@ func (server *serverStruct) cancelPasskeyRegistrationAction(requestId string, se
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get passkey registration: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1727,7 +1735,7 @@ func (server *serverStruct) cancelPasskeyRegistrationAction(requestId string, se
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to delete passkey registration: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1736,6 +1744,7 @@ func (server *serverStruct) cancelPasskeyRegistrationAction(requestId string, se
 
 func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialAction(
 	requestId string,
+	clientIPAddress string,
 	sessionToken string,
 	passkeyRegistrationToken string,
 	webauthnCredentialId []byte,
@@ -1764,7 +1773,7 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialActio
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1774,7 +1783,7 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialActio
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get email address update: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if passkeyRegistration.sessionId != session.id {
@@ -1796,7 +1805,7 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialActio
 	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(webauthnCredentialId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if !webauthnCredentialIdAvailable {
@@ -1839,14 +1848,14 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialActio
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to set passkey registration passkey webauthn credential: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
 	return ""
 }
 
-func (server *serverStruct) setPasskeyRegistrationPasskeyNameAction(requestId string, sessionToken string, passkeyRegistrationToken string, passkeyName string) string {
+func (server *serverStruct) setPasskeyRegistrationPasskeyNameAction(requestId string, clientIPAddress string, sessionToken string, passkeyRegistrationToken string, passkeyName string) string {
 	const (
 		errorCodeInvalidSessionToken             = "invalid_session_token"
 		errorCodeInvalidPasskeyRegistrationToken = "invalid_passkey_registration_token"
@@ -1867,7 +1876,7 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyNameAction(requestId st
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1877,7 +1886,7 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyNameAction(requestId st
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get email address update: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if passkeyRegistration.sessionId != session.id {
@@ -1898,19 +1907,19 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyNameAction(requestId st
 
 	if !passkeyRegistration.passkeySignatureAlgorithmDefined {
 		errorMessage := "signup passkey registration public key algorithm not defined"
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if !passkeyRegistration.passkeyWebauthnCredentialIdDefined {
 		errorMessage := "signup passkey registration webauthn credential id not defined"
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
 	userPasskeyCount, err := server.getUserPasskeyCount(session.userId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user passkey count: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if userPasskeyCount > maxPasskeyCountLimit {
@@ -1920,7 +1929,7 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyNameAction(requestId st
 	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(passkeyRegistration.passkeyWebauthnCredentialId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if !webauthnCredentialIdAvailable {
@@ -1933,7 +1942,7 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyNameAction(requestId st
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -1943,25 +1952,25 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyNameAction(requestId st
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to complete passkey registration: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
-	server.logPasskeyRegistrationCompletedRequestEvent(requestId, session.id, session.userId, passkeyRegistration.id, passkey.id)
+	server.logPasskeyRegistrationCompletedRequestEvent(requestId, clientIPAddress, session.id, session.userId, passkeyRegistration.id, passkey.id)
 
 	err = server.sendPasskeyRegisteredNotificationEmail(user.emailAddress, passkey.name)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send passkey registered notification email: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
-	server.logRequestEmail(requestId, user.emailAddress, emailTypePasskeyRegisteredNotification)
+	server.logRequestEmail(requestId, clientIPAddress, user.emailAddress, emailTypePasskeyRegisteredNotification)
 
 	return ""
 }
 
-func (server *serverStruct) startPasskeyDeletionAction(requestId string, sessionToken string, passkeyId string) (string, string, string) {
+func (server *serverStruct) startPasskeyDeletionAction(requestId string, clientIPAddress string, sessionToken string, passkeyId string) (string, string, string) {
 	const (
 		errorCodeInvalidSessionToken = "invalid_session_token"
 		errorCodePasskeyNotFound     = "passkey_not_found"
@@ -1975,7 +1984,7 @@ func (server *serverStruct) startPasskeyDeletionAction(requestId string, session
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", "", errorCodeUnexpectedError
 	}
 
@@ -1985,7 +1994,7 @@ func (server *serverStruct) startPasskeyDeletionAction(requestId string, session
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get passkey: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", "", errorCodeUnexpectedError
 	}
 
@@ -1995,11 +2004,11 @@ func (server *serverStruct) startPasskeyDeletionAction(requestId string, session
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create passkey deletion: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", "", errorCodeUnexpectedError
 	}
 
-	server.logPasskeyDeletionStartedRequestEvent(requestId, session.id, session.userId, passkeyDeletion.id, passkeyDeletion.passkeyId, identityVerification.id)
+	server.logPasskeyDeletionStartedRequestEvent(requestId, clientIPAddress, session.id, session.userId, passkeyDeletion.id, passkeyDeletion.passkeyId, identityVerification.id)
 
 	passkeyDeletionToken := createSessionToken(passkeyDeletion.id, passkeyDeletionSecret)
 	identityVerificationToken := createSessionToken(identityVerification.id, identityVerificationSecret)
@@ -2007,7 +2016,7 @@ func (server *serverStruct) startPasskeyDeletionAction(requestId string, session
 	return passkeyDeletionToken, identityVerificationToken, ""
 }
 
-func (server *serverStruct) cancelPasskeyDeletionAction(requestId string, sessionToken string, passkeyDeletionToken string) string {
+func (server *serverStruct) cancelPasskeyDeletionAction(requestId string, clientIPAddress string, sessionToken string, passkeyDeletionToken string) string {
 	const (
 		errorCodeInvalidSessionToken         = "invalid_session_token"
 		errorCodeInvalidPasskeyDeletionToken = "invalid_passkey_deletion_token"
@@ -2022,7 +2031,7 @@ func (server *serverStruct) cancelPasskeyDeletionAction(requestId string, sessio
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -2032,7 +2041,7 @@ func (server *serverStruct) cancelPasskeyDeletionAction(requestId string, sessio
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get passkey deletion: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -2046,14 +2055,14 @@ func (server *serverStruct) cancelPasskeyDeletionAction(requestId string, sessio
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to delete passkey deletion: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
 	return ""
 }
 
-func (server *serverStruct) confirmPasskeyDeletionAction(requestId string, sessionToken string, passkeyDeletionToken string) string {
+func (server *serverStruct) confirmPasskeyDeletionAction(requestId string, clientIPAddress string, sessionToken string, passkeyDeletionToken string) string {
 	const (
 		errorCodeInvalidSessionToken         = "invalid_session_token"
 		errorCodeInvalidPasskeyDeletionToken = "invalid_passkey_deletion_token"
@@ -2069,7 +2078,7 @@ func (server *serverStruct) confirmPasskeyDeletionAction(requestId string, sessi
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -2079,7 +2088,7 @@ func (server *serverStruct) confirmPasskeyDeletionAction(requestId string, sessi
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get passkey deletion: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if passkeyDeletion.sessionId != session.id {
@@ -2095,7 +2104,7 @@ func (server *serverStruct) confirmPasskeyDeletionAction(requestId string, sessi
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -2105,25 +2114,25 @@ func (server *serverStruct) confirmPasskeyDeletionAction(requestId string, sessi
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to complete passkey deletion: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
-	server.logPasskeyDeletionCompletedRequestEvent(requestId, session.id, session.userId, passkeyDeletion.id, passkeyDeletion.passkeyId)
+	server.logPasskeyDeletionCompletedRequestEvent(requestId, clientIPAddress, session.id, session.userId, passkeyDeletion.id, passkeyDeletion.passkeyId)
 
 	err = server.sendPasskeyDeletedNotificationEmail(user.emailAddress, passkeyName)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send passkey deleted notification email: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
-	server.logRequestEmail(requestId, user.emailAddress, emailTypePasskeyDeletedNotification)
+	server.logRequestEmail(requestId, clientIPAddress, user.emailAddress, emailTypePasskeyDeletedNotification)
 
 	return ""
 }
 
-func (server *serverStruct) startAccountDeletionAction(requestId string, sessionToken string) (string, string, string) {
+func (server *serverStruct) startAccountDeletionAction(requestId string, clientIPAddress string, sessionToken string) (string, string, string) {
 	const (
 		errorCodeInvalidSessionToken = "invalid_session_token"
 		errorCodeConflict            = "conflict"
@@ -2136,7 +2145,7 @@ func (server *serverStruct) startAccountDeletionAction(requestId string, session
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", "", errorCodeUnexpectedError
 	}
 
@@ -2146,11 +2155,11 @@ func (server *serverStruct) startAccountDeletionAction(requestId string, session
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create account deletion: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return "", "", errorCodeUnexpectedError
 	}
 
-	server.logAccountDeletionStartedRequestEvent(requestId, session.id, session.userId, accountDeletion.id, identityVerification.id)
+	server.logAccountDeletionStartedRequestEvent(requestId, clientIPAddress, session.id, session.userId, accountDeletion.id, identityVerification.id)
 
 	accountDeletionToken := createSessionToken(accountDeletion.id, accountDeletionSecret)
 	identityVerificationToken := createSessionToken(identityVerification.id, identityVerificationSecret)
@@ -2158,7 +2167,7 @@ func (server *serverStruct) startAccountDeletionAction(requestId string, session
 	return accountDeletionToken, identityVerificationToken, ""
 }
 
-func (server *serverStruct) cancelAccountDeletionAction(requestId string, sessionToken string, accountDeletionToken string) string {
+func (server *serverStruct) cancelAccountDeletionAction(requestId string, clientIPAddress string, sessionToken string, accountDeletionToken string) string {
 	const (
 		errorCodeInvalidSessionToken         = "invalid_session_token"
 		errorCodeInvalidAccountDeletionToken = "invalid_account_deletion_token"
@@ -2173,7 +2182,7 @@ func (server *serverStruct) cancelAccountDeletionAction(requestId string, sessio
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -2183,7 +2192,7 @@ func (server *serverStruct) cancelAccountDeletionAction(requestId string, sessio
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get account deletion: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -2197,14 +2206,14 @@ func (server *serverStruct) cancelAccountDeletionAction(requestId string, sessio
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to delete account deletion: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
 	return ""
 }
 
-func (server *serverStruct) confirmAccountDeletionAction(requestId string, sessionToken string, accountDeletionToken string) string {
+func (server *serverStruct) confirmAccountDeletionAction(requestId string, clientIPAddress string, sessionToken string, accountDeletionToken string) string {
 	const (
 		errorCodeInvalidSessionToken         = "invalid_session_token"
 		errorCodeInvalidAccountDeletionToken = "invalid_account_deletion_token"
@@ -2220,7 +2229,7 @@ func (server *serverStruct) confirmAccountDeletionAction(requestId string, sessi
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
@@ -2230,7 +2239,7 @@ func (server *serverStruct) confirmAccountDeletionAction(requestId string, sessi
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get account deletion: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 	if accountDeletion.sessionId != session.id {
@@ -2246,11 +2255,11 @@ func (server *serverStruct) confirmAccountDeletionAction(requestId string, sessi
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to complete account deletion: %s", err.Error())
-		server.logActionError(requestId, errorMessage)
+		server.logRequestError(requestId, clientIPAddress, errorMessage)
 		return errorCodeUnexpectedError
 	}
 
-	server.logAccountDeletionCompletedRequestEvent(requestId, session.id, session.userId, accountDeletion.id)
+	server.logAccountDeletionCompletedRequestEvent(requestId, clientIPAddress, session.id, session.userId, accountDeletion.id)
 
 	return ""
 }

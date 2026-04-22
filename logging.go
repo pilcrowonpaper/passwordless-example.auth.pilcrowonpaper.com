@@ -7,7 +7,7 @@ import (
 	"github.com/pilcrowonpaper/go-json"
 )
 
-func (server *serverStruct) logActionSuccessResult(requestId string, actionName string) {
+func (server *serverStruct) logActionSuccessResult(requestId string, clientIPAddress string, actionName string) {
 	if !server.logging.actionResult {
 		return
 	}
@@ -18,13 +18,14 @@ func (server *serverStruct) logActionSuccessResult(requestId string, actionName 
 	logJSONBuilder.AddString("type", "action_success_result")
 	logJSONBuilder.AddInt64("timestamp", now.Unix())
 	logJSONBuilder.AddString("request_id", requestId)
+	logJSONBuilder.AddString("client_ip_address", clientIPAddress)
 	logJSONBuilder.AddString("action", actionName)
 	logJSON := logJSONBuilder.Done()
 
 	fmt.Println(logJSON)
 }
 
-func (server *serverStruct) logActionErrorResult(requestId string, actionName string, errorCode string) {
+func (server *serverStruct) logRequestErrorResult(requestId string, clientIPAddress string, actionName string, errorCode string) {
 	if !server.logging.actionResult {
 		return
 	}
@@ -35,6 +36,7 @@ func (server *serverStruct) logActionErrorResult(requestId string, actionName st
 	logJSONBuilder.AddString("type", "action_error_result")
 	logJSONBuilder.AddInt64("timestamp", now.Unix())
 	logJSONBuilder.AddString("request_id", requestId)
+	logJSONBuilder.AddString("client_ip_address", clientIPAddress)
 	logJSONBuilder.AddString("action", actionName)
 	logJSONBuilder.AddString("error_code", errorCode)
 	logJSON := logJSONBuilder.Done()
@@ -42,24 +44,25 @@ func (server *serverStruct) logActionErrorResult(requestId string, actionName st
 	fmt.Println(logJSON)
 }
 
-func (server *serverStruct) logActionError(requestId string, errorMessage string) {
-	if !server.logging.actionError {
+func (server *serverStruct) logRequestError(requestId string, clientIPAddress string, errorMessage string) {
+	if !server.logging.requestError {
 		return
 	}
 
 	now := time.Now()
 
 	logJSONBuilder := json.NewObjectBuilder(loggingJSONStringCharacterEscapingBehavior)
-	logJSONBuilder.AddString("type", "action_error")
+	logJSONBuilder.AddString("type", "request_error")
 	logJSONBuilder.AddInt64("timestamp", now.Unix())
 	logJSONBuilder.AddString("request_id", requestId)
+	logJSONBuilder.AddString("client_ip_address", clientIPAddress)
 	logJSONBuilder.AddString("message", errorMessage)
 	logJSON := logJSONBuilder.Done()
 
 	fmt.Println(logJSON)
 }
 
-func (server *serverStruct) logRequestEvent(eventName string, requestId string, tags requestEventTagsStruct) {
+func (server *serverStruct) logRequestEvent(eventName string, requestId string, clientIPAddress string, tags requestEventTagsStruct) {
 	if !server.logging.requestEvent {
 		return
 	}
@@ -109,6 +112,7 @@ func (server *serverStruct) logRequestEvent(eventName string, requestId string, 
 	logJSONBuilder.AddString("type", "action_event")
 	logJSONBuilder.AddInt64("timestamp", now.Unix())
 	logJSONBuilder.AddString("request_id", requestId)
+	logJSONBuilder.AddString("client_ip_address", clientIPAddress)
 	logJSONBuilder.AddString("event", eventName)
 	logJSONBuilder.AddJSON("tags", tagsJSON)
 	logJSON := logJSONBuilder.Done()
@@ -204,7 +208,7 @@ const (
 	emailTypePasskeyDeletedNotification                        = "passkey_deleted_notification"
 )
 
-func (server *serverStruct) logRequestEmail(requestId string, emailAddress string, emailType string) {
+func (server *serverStruct) logRequestEmail(requestId string, clientIPAddress string, emailAddress string, emailType string) {
 	if !server.logging.requestEmail {
 		return
 	}
@@ -214,6 +218,7 @@ func (server *serverStruct) logRequestEmail(requestId string, emailAddress strin
 	logJSONBuilder := json.NewObjectBuilder(loggingJSONStringCharacterEscapingBehavior)
 	logJSONBuilder.AddString("type", "request_email")
 	logJSONBuilder.AddString("request_id", requestId)
+	logJSONBuilder.AddString("client_ip_address", clientIPAddress)
 	logJSONBuilder.AddInt64("timestamp", now.Unix())
 	logJSONBuilder.AddString("email_address", emailAddress)
 	logJSONBuilder.AddString("email_type", emailType)
