@@ -56,7 +56,7 @@ CREATE TABLE email_code_signin (
     created_at INTEGER NOT NULL
 ) STRICT;
 
-CREATE INDEX email_code_signin_user_id_index ON email_code_signin(id);
+CREATE INDEX email_code_signin_user_id_index ON email_code_signin(user_id);
 
 CREATE TABLE identity_verification (
     id TEXT NOT NULL PRIMARY KEY,
