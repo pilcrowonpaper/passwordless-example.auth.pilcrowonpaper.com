@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"mime"
 	"net/http"
@@ -11,10 +12,11 @@ import (
 	"strings"
 
 	"github.com/pilcrowonpaper/go-json"
+
+	_ "embed"
 )
 
 const (
-	routeAction                                      = "action"
 	routeHomePage                                    = "home_page"
 	routeAccountPage                                 = "account_page"
 	routeSignUpPage                                  = "sign_up_page"
@@ -1087,6 +1089,9 @@ func writeActionSuccessResult(w http.ResponseWriter, requestId string, valuesJSO
 	w.Write(bodyJSONBytes)
 }
 
+//go:embed frontend_assets/home.css
+var homePageStylesheet string
+
 func (server *serverStruct) homePageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	_, _, err := server.validateRequestSessionToken(r)
 	if err == nil {
@@ -1102,10 +1107,24 @@ func (server *serverStruct) homePageRoute(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	pageHTML := createHomePageHTML(requestId)
+	pageTitle := "Passwordless auth example"
+	bodyHTML := `<h1>Passwordless auth example</h1>
+<p>This an example website that implements email code sign-in and passkeys following best practices. All accounts older than 24 hours are automatically deleted at midnight (UTC).</p>
+<div id="auth">
+	<a href="/sign-in" class="block-button">Sign in</a>
+	<a href="/sign-up" class="block-button">Create an account</a>
+</div>`
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, "", homePageStylesheet, "")
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/account.js
+var accountPageScript string
+
+//go:embed frontend_assets/account.css
+var accountPageStylesheet string
 
 func (server *serverStruct) accountPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	session, sessionToken, err := server.validateRequestSessionToken(r)
@@ -1147,10 +1166,62 @@ func (server *serverStruct) accountPageRoute(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	pageHTML := createAccountPageHTML(requestId, sessionToken, user, passkeys)
+	passkeyListHTML := ""
+	if len(passkeys) > 0 {
+		passkeyListHTMLBuilder := strings.Builder{}
+		passkeyListHTMLBuilder.WriteString(`<ul id="passkeys-list">`)
+		for _, passkey := range passkeys {
+			listItemHTML := fmt.Sprintf(`<li><p>%s</p><button class="delete-passkey-button link-button" data-passkey-id="%s">Delete</button></li>`, html.EscapeString(passkey.name), html.EscapeString(passkey.id))
+			passkeyListHTMLBuilder.WriteString(listItemHTML)
+		}
+		passkeyListHTMLBuilder.WriteString("</ul>")
+
+		passkeyListHTML = passkeyListHTMLBuilder.String()
+	}
+
+	pageTitle := "My account | Passwordless auth example"
+	bodyHTMLTemplate := `<h1>My account</h1>
+<section>
+	<h2>Account information</h2>
+	<p id="account-info-user-id">User ID: %s</p>
+	<p id="account-info-email-address">Email address: %s</p>
+	<button id="update-email-address-button" class="block-button">Update email address</button>
+</section>
+<section>
+	<h2>Passkeys</h2>
+	<p id="passkeys-description">Passkeys are secure login credentials stored on your device, password manager, or security key that allow you to sign in using your device PIN or biometrics.</p>
+	%s
+	<button id="register-passkey-button" class="block-button">Register passkey</button>
+</section>
+<section>
+	<h2>Sign out</h2>
+	<div id="sign-out-controls">
+		<button id="sign-out-button" class="block-button">Sign out</button>
+		<button id="sign-out-all-devices-button" class="link-button">Sign out of all devices</button>
+	</div>
+</section>
+<section>
+	<h2>Delete your account</h2>
+	<p id="delete-account-description">Deleting your account will permanently remove all your data. Some logs (including your IP address and email address) may be retained for up to 90 days.</p>
+	<button id="delete-account-button" class="block-button">Delete account</button>
+</section>`
+
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(user.id), html.EscapeString(user.emailAddress), passkeyListHTML)
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("session_token", sessionToken)
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, accountPageScript, accountPageStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/sign_up.js
+var signUpPageScript string
+
+//go:embed frontend_assets/sign_up.css
+var signUpPageStylesheet string
 
 func (server *serverStruct) signUpPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	_, _, err := server.validateRequestSessionToken(r)
@@ -1166,11 +1237,26 @@ func (server *serverStruct) signUpPageRoute(w http.ResponseWriter, r *http.Reque
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
+	pageTitle := "Create an account | Passwordless auth example"
+	bodyHTML := `<h1>Create an account</h1>
+<p>All accounts older than 24 hours are permanently deleted at midnight UTC each day. For security purposes, logs (which may include your IP address and email address) are retained for up to 90 days. These logs are processed and stored by <a href="https://cloudflare.com">Cloudflare</a> and <a href="https://railway.com">Railway</a>. We do not share or sell this data to any third parties.</p>
+<form id="sign-up-form">
+	<label for="sign-up-form-email-address-input">Email address (lowercase)</label>
+	<input id="sign-up-form-email-address-input" name="email_address" type="email" required />
+	<button id="sign-up-form-submit-button">Continue</button>
+</form>
+<a id="sign-in-link" href="/sign-in" class="link-button">Sign in with an existing account</a>`
 
-	pageHTML := createSignUpPageHTML(requestId)
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, signUpPageScript, signUpPageStylesheet, "")
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/sign_up_verify_email_address.js
+var signUpVerifyEmailAddressPageScript string
+
+//go:embed frontend_assets/sign_up_verify_email_address.css
+var signUpVerifyEmailAddressPageStylesheet string
 
 func (server *serverStruct) signUpVerifyEmailAddressPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	_, _, err := server.validateRequestSessionToken(r)
@@ -1208,10 +1294,35 @@ func (server *serverStruct) signUpVerifyEmailAddressPageRoute(w http.ResponseWri
 		return
 	}
 
-	pageHTML := createSignUpVerifyEmailAddressPageHTML(requestId, signupToken, signup)
+	pageTitle := "Verify your email address | Passwordless auth example"
+
+	bodyHTMLTemplate := `<h1>Verify your email address</h1>
+<p>We sent an 8-digit verification code to %s. It may take up to 30 seconds to arrive. Check your spam or junk folder if you don't see it.</p>
+<form id="verify-verification-code-form">
+	<label for="verify-verification-code-form-verification-code-input">Verification code (hyphens and spaces are optional)</label>
+	<input id="verify-verification-code-form-verification-code-input" name="verification_code" autocomplete="one-time-code" required />
+	<button id="verify-verification-code-form-submit-button">Verify email address</button>
+</form>
+<div id="controls">
+	<button id="resend-verification-code-button" class="link-button">Resend verification code</button>
+	<button id="cancel-button" class="link-button">Cancel</button>
+</div>`
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(signup.emailAddress))
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("signup_token", signupToken)
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, signUpVerifyEmailAddressPageScript, signUpVerifyEmailAddressPageStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/sign_up_register_passkey.js
+var signUpRegisterPasskeyScript string
+
+//go:embed frontend_assets/sign_up_register_passkey.css
+var signUpRegisterPasskeyStylesheet string
 
 func (server *serverStruct) signUpRegisterPasskeyPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	_, _, err := server.validateRequestSessionToken(r)
@@ -1255,10 +1366,31 @@ func (server *serverStruct) signUpRegisterPasskeyPageRoute(w http.ResponseWriter
 		return
 	}
 
-	pageHTML := createSignUpRegisterPasskeyPage(requestId, signupToken, signup)
+	pageTitle := "Register a passkey | Passwordless auth example"
+
+	bodyHTML := `<h1>Register a passkey</h1>
+<p>Passkeys are secure login credentials stored on your device, password manager, or security key that allow you to sign in using your device PIN or biometrics.</p>
+<div id="controls">
+	<button id="create-passkey-button" class="block-button">Create a passkey</button>
+	<button id="skip-button" class="link-button">Skip</button>
+</div>`
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("signup_token", signupToken)
+	pageDataJSONBuilder.AddString("signup_target_user_id", signup.targetUserId)
+	pageDataJSONBuilder.AddString("signup_email_address", signup.emailAddress)
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, signUpRegisterPasskeyScript, signUpRegisterPasskeyStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/sign_up_register_passkey_set_passkey_name.js
+var signUpRegisterPasskeySetPasskeyNameScript string
+
+//go:embed frontend_assets/sign_up_register_passkey_set_passkey_name.css
+var signUpRegisterPasskeySetPasskeyNameStylesheet string
 
 func (server *serverStruct) signUpRegisterPasskeySetPasskeyNamePageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	_, _, err := server.validateRequestSessionToken(r)
@@ -1307,10 +1439,31 @@ func (server *serverStruct) signUpRegisterPasskeySetPasskeyNamePageRoute(w http.
 		passkeyNameSuggestion = authenticatorName
 	}
 
-	pageHTML := createSignUpRegisterPasskeySetPasskeyNamePage(requestId, signupToken, passkeyNameSuggestion)
+	pageTitle := "Name your passkey | Passwordless auth example"
+
+	bodyHTMLTemplate := `<h1>Name your passkey</h1>
+<p>Give your passkey a name so you can easily recognize and manage it later.</p>
+<form id="set-passkey-name-form">
+	<label for="set-passkey-name-form-name-input">Passkey name (Standard characters except double quotes)</label>
+	<input id="set-passkey-name-form-name-input" name="passkey_name" required value="%s" />
+	<button id="set-passkey-name-form-submit-button">Complete</button>
+</form>`
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(passkeyNameSuggestion))
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("signup_token", signupToken)
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, signUpRegisterPasskeySetPasskeyNameScript, signUpRegisterPasskeySetPasskeyNameStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/sign_in.js
+var signInPageScript string
+
+//go:embed frontend_assets/sign_in.css
+var signInPageStylesheet string
 
 func (server *serverStruct) signInPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	_, _, err := server.validateRequestSessionToken(r)
@@ -1336,10 +1489,34 @@ func (server *serverStruct) signInPageRoute(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	pageHTML := createSignInPage(requestId, passkeySignin)
+	pageTitle := "Sign in | Passwordless auth example"
+
+	bodyHTML := `<h1>Sign in</h1>
+<form id="sign-in-with-email-code-form">
+	<label for="sign-in-with-email-code-form-email-address-input">Email address (lowercase)</label>
+	<input id="sign-in-with-email-code-form-email-address-input" name="email_address" type="email" autocomplete="webauthn" required/>
+	<button id="sign-in-with-email-code-form-submit-button">Continue</button>
+</form>
+<button id="sign-in-with-passkey-button" class="link-button">Sign in with passkeys</button>
+<div id="links">
+	<a id="create-account-link" href="/sign-up" class="link-button">Create a new account</a>
+</div>`
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("passkey_signin_id", passkeySignin.id)
+	pageDataJSONBuilder.AddString("passkey_signin_challenge", base64.StdEncoding.EncodeToString(passkeySignin.challenge))
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, signInPageScript, signInPageStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/sign_in_verify_email_code.js
+var signInVerifyEmailCodePageScript string
+
+//go:embed frontend_assets/sign_in_verify_email_code.css
+var signInVerifyEmailCodePageStylesheet string
 
 func (server *serverStruct) signInVerifyEmailCodePageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	_, _, err := server.validateRequestSessionToken(r)
@@ -1371,10 +1548,33 @@ func (server *serverStruct) signInVerifyEmailCodePageRoute(w http.ResponseWriter
 		return
 	}
 
-	pageHTML := createSignInVerifyEmailCodePage(requestId, emailCodeSigninToken, emailCodeSignin.emailAddress)
+	pageTitle := "Sign in with email code | Passwordless auth example"
+
+	bodyHTMLTemplate := `<h1>Sign in with email code</h1>
+<p>We sent a one-time code to %s.</p> 
+<form id="verify-email-code-form">
+	<label for="verify-email-code-form-email-code-input">Code</label>
+	<input id="verify-email-code-form-email-code-input" name="email_code" autocomplete="one-time-code" required/>
+	<button id="verify-email-code-form-submit-button">Continue</button>
+</form>
+<button id="cancel-button" class="link-button">Cancel</button>`
+
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(emailCodeSignin.emailAddress))
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("email_code_signin_token", emailCodeSigninToken)
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, signInVerifyEmailCodePageScript, signInVerifyEmailCodePageStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/verify_identity.js
+var verifyIdentityPageScript string
+
+//go:embed frontend_assets/verify_identity.css
+var verifyIdentityPageStylesheet string
 
 func (server *serverStruct) verifyIdentityPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	session, sessionToken, err := server.validateRequestSessionToken(r)
@@ -1423,10 +1623,49 @@ func (server *serverStruct) verifyIdentityPageRoute(w http.ResponseWriter, r *ht
 		return
 	}
 
-	pageHTML := createVerifyIdentityPageHTML(requestId, sessionToken, identityVerificationToken, identityVerification, passkeys)
+	pageTitle := "Verify your identity | Passwordless auth example"
+
+	var controlsHTML string
+	if len(passkeys) > 0 {
+		controlsHTML = `<div id="controls">
+	<button id="verify-with-passkey-button" class="block-button">Verify with passkeys</button>
+	<button id="verify-with-email-code-button" class="link-button">Verify with email code</button>
+</div>`
+	} else {
+		controlsHTML = `<div id="controls">
+	<button id="verify-with-email-code-button" class="block-button">Verify with email code</button>
+</div>`
+	}
+
+	bodyHTMLTemplate := `<h1>Verify your identity</h1>
+<p>Verify your identity to continue.</p>
+<div id="controls">%s</div>
+<button id="cancel-button" class="link-button">Cancel</button>`
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, controlsHTML)
+
+	passkeyWebauthnCredentialIdsJSONArray := json.NewArrayBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	for _, passkey := range passkeys {
+		passkeyWebauthnCredentialIdsJSONArray.AddString(base64.StdEncoding.EncodeToString(passkey.webauthnCredentialId))
+	}
+	passkeyWebauthnCredentialIdsJSON := passkeyWebauthnCredentialIdsJSONArray.Done()
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("session_token", sessionToken)
+	pageDataJSONBuilder.AddString("identity_verification_token", identityVerificationToken)
+	pageDataJSONBuilder.AddString("identity_verification_passkey_verification_challenge", base64.StdEncoding.EncodeToString(identityVerification.passkeyVerificationChallenge))
+	pageDataJSONBuilder.AddJSON("passkey_webauthn_credential_ids", passkeyWebauthnCredentialIdsJSON)
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, verifyIdentityPageScript, verifyIdentityPageStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/verify_identity_verify_email_code.js
+var verifyIdentityVerifyEmailCodePageScript string
+
+//go:embed frontend_assets/verify_identity_verify_email_code.css
+var verifyIdentityVerifyEmailCodePageStylesheet string
 
 func (server *serverStruct) verifyIdentityVerifyEmailCodePageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	session, sessionToken, err := server.validateRequestSessionToken(r)
@@ -1472,10 +1711,34 @@ func (server *serverStruct) verifyIdentityVerifyEmailCodePageRoute(w http.Respon
 		return
 	}
 
-	pageHTML := createVerifyIdentityVerifyEmailCodePageHTML(requestId, sessionToken, identityVerificationToken, identityVerification.emailAddress)
+	pageTitle := "Verify identity with email code | Passwordless auth example"
+
+	bodyHTMLTemplate := `<h1>Verify identity with email code</h1>
+<p>We sent a one-time code to %s.</p> 
+<form id="verify-email-code-form">
+	<label for="verify-email-code-form-email-code-input">Code</label>
+	<input id="verify-email-code-form-email-code-input" name="email_code" autocomplete="one-time-code" required/>
+	<button id="verify-email-code-form-submit-button">Continue</button>
+</form>
+<button id="cancel-button" class="link-button">Cancel</button>`
+
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(identityVerification.emailAddress))
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("session_token", sessionToken)
+	pageDataJSONBuilder.AddString("identity_verification_token", identityVerificationToken)
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, verifyIdentityVerifyEmailCodePageScript, verifyIdentityVerifyEmailCodePageStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/update_email_address_set_new_email_address.js
+var updateEmailAddressSetNewEmailAddressPageScript string
+
+//go:embed frontend_assets/update_email_address_set_new_email_address.css
+var updateEmailAddressSetNewEmailAddressPageStylesheet string
 
 func (server *serverStruct) updateEmailAddressSetNewEmailAddressPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	session, sessionToken, err := server.validateRequestSessionToken(r)
@@ -1526,10 +1789,31 @@ func (server *serverStruct) updateEmailAddressSetNewEmailAddressPageRoute(w http
 		return
 	}
 
-	pageHTML := createUpdateEmailAddressSetNewEmailAddressPageHTML(requestId, sessionToken, emailAddressUpdateToken)
+	pageTitle := "Set your new email address | Passwordless auth example"
+
+	bodyHTML := `<h1>Set your new email address</h1>
+<form id="set-new-email-address-form">
+	<label for="set-new-email-address-form-new-email-address-input">New email address</label>
+	<input id="set-new-email-address-form-new-email-address-input" name="new_email_address" type="email" required />
+	<button id="set-new-email-address-form-submit-button">Continue</button>
+</form>
+<button id="cancel-button" class="link-button">Cancel</button>`
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("session_token", sessionToken)
+	pageDataJSONBuilder.AddString("email_address_update_token", emailAddressUpdateToken)
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, updateEmailAddressSetNewEmailAddressPageScript, updateEmailAddressSetNewEmailAddressPageStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/update_email_address_verify_new_email_address.js
+var updateEmailAddressVerifyNewEmailAddressPageScript string
+
+//go:embed frontend_assets/update_email_address_verify_new_email_address.css
+var updateEmailAddressVerifyNewEmailAddressPageStylesheet string
 
 func (server *serverStruct) updateEmailAddressVerifyNewEmailAddressPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	session, sessionToken, err := server.validateRequestSessionToken(r)
@@ -1590,10 +1874,36 @@ func (server *serverStruct) updateEmailAddressVerifyNewEmailAddressPageRoute(w h
 		return
 	}
 
-	pageHTML := createUpdateEmailAddressVerifyNewEmailAddressPageHTML(requestId, sessionToken, emailAddressUpdateToken, emailAddressUpdate.newEmailAddress)
+	pageTitle := "Verify your new email address | Passwordless auth example"
+
+	bodyHTMLTemplate := `<h1>Verify your new email address</h1>
+<p>We sent an 8-digit verification code to %s. It may take up to 30 seconds to arrive. Check your spam or junk folder if you don't see it.</p>
+<form id="verify-verification-code-form">
+	<label for="verify-verification-code-form-verification-code-input">Verification code (hyphens and spaces are optional)</label>
+	<input id="verify-verification-code-form-verification-code-input" name="verification_code" autocomplete="one-time-code" required />
+	<button id="verify-verification-code-form-submit-button">Update email address</button>
+</form>
+<div id="controls">
+	<button id="resend-verification-code-button" class="link-button">Resend verification code</button>
+	<button id="cancel-button" class="link-button">Cancel</button>
+</div>`
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(emailAddressUpdate.newEmailAddress))
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("session_token", sessionToken)
+	pageDataJSONBuilder.AddString("email_address_update_token", emailAddressUpdateToken)
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, updateEmailAddressVerifyNewEmailAddressPageScript, updateEmailAddressVerifyNewEmailAddressPageStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/register_passkey_create_passkey.js
+var registerPasskeyCreatePasskeyPageScript string
+
+//go:embed frontend_assets/register_passkey_create_passkey.css
+var registerPasskeyCreatePasskeyPageStylesheet string
 
 func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	session, sessionToken, err := server.validateRequestSessionToken(r)
@@ -1696,10 +2006,37 @@ func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.Respons
 		return
 	}
 
-	pageHTML := createRegisterPasskeyCreatePasskeyPageHTML(requestId, sessionToken, passkeyRegistrationToken, user, passkeys)
+	pageTitle := "Create a passkey | Passwordless auth example"
+
+	bodyHTML := `<h1>Create a passkey</h1>
+<p>Create a passkey for your account on your device, security key, or password manager.</p>
+<button id="create-passkey-button" class="block-button">Create</button>
+<button id="cancel-button" class="link-button">Cancel</button>`
+
+	passkeyWebauthnCredentialIdsJSONArray := json.NewArrayBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	for _, passkey := range passkeys {
+		passkeyWebauthnCredentialIdsJSONArray.AddString(base64.StdEncoding.EncodeToString(passkey.webauthnCredentialId))
+	}
+	passkeyWebauthnCredentialIdsJSON := passkeyWebauthnCredentialIdsJSONArray.Done()
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("session_token", sessionToken)
+	pageDataJSONBuilder.AddString("passkey_registration_token", passkeyRegistrationToken)
+	pageDataJSONBuilder.AddString("user_id", user.id)
+	pageDataJSONBuilder.AddString("user_email_address", user.emailAddress)
+	pageDataJSONBuilder.AddJSON("passkey_webauthn_credential_ids", passkeyWebauthnCredentialIdsJSON)
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, registerPasskeyCreatePasskeyPageScript, registerPasskeyCreatePasskeyPageStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/register_passkey_set_passkey_name.js
+var registerPasskeySetPasskeyNamePageScript string
+
+//go:embed frontend_assets/register_passkey_set_passkey_name.css
+var registerPasskeySetPasskeyNamePageStylesheet string
 
 func (server *serverStruct) registerPasskeySetPasskeyNamePageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	session, sessionToken, err := server.validateRequestSessionToken(r)
@@ -1782,10 +2119,32 @@ func (server *serverStruct) registerPasskeySetPasskeyNamePageRoute(w http.Respon
 		passkeyNameSuggestion = authenticatorName
 	}
 
-	pageHTML := createRegisterPasskeySetPasskeyNamePageHTML(requestId, sessionToken, passkeyRegistrationToken, passkeyNameSuggestion)
+	pageTitle := "Name your passkey | Passwordless auth example"
+
+	bodyHTMLTemplate := `<h1>Name your passkey</h1>
+<p>Give your passkey a name so you can easily recognize and manage it later.</p>
+<form id="set-passkey-name-form">
+	<label for="set-passkey-name-form-name-input">Passkey name (Standard characters except double quotes)</label>
+	<input id="set-passkey-name-form-name-input" name="passkey_name" required value="%s" />
+	<button id="set-passkey-name-form-submit-button">Complete</button>
+</form>`
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(passkeyNameSuggestion))
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("session_token", sessionToken)
+	pageDataJSONBuilder.AddString("passkey_registration_token", passkeyRegistrationToken)
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, registerPasskeySetPasskeyNamePageScript, registerPasskeySetPasskeyNamePageStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/delete_passkey_confirm.js
+var deletePasskeyConfirmPageScript string
+
+//go:embed frontend_assets/delete_passkey_confirm.css
+var deletePasskeyConfirmPageStylesheet string
 
 func (server *serverStruct) deletePasskeyConfirmPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	session, sessionToken, err := server.validateRequestSessionToken(r)
@@ -1845,10 +2204,32 @@ func (server *serverStruct) deletePasskeyConfirmPageRoute(w http.ResponseWriter,
 		return
 	}
 
-	pageHTML := createDeletePasskeyConfirmPageHTML(requestId, sessionToken, passkeyDeletionToken, passkey.name)
+	pageTitle := "Delete a passkey | Passwordless auth example"
+
+	bodyHTMLTemplate := `<h1>Delete a passkey</h1>
+<p>Are you sure you want to delete passkey "%s"? This action is permanent and cannot be undone.<p>
+<div id="controls">
+	<button id="confirm-button" class="block-button">Delete passkey</button>
+	<button id="cancel-button" class="link-button">Cancel</button>
+</div>`
+
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(passkey.name))
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("session_token", sessionToken)
+	pageDataJSONBuilder.AddString("passkey_deletion_token", passkeyDeletionToken)
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, deletePasskeyConfirmPageScript, deletePasskeyConfirmPageStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
+
+//go:embed frontend_assets/delete_account_confirm.js
+var deleteAccountConfirmPageScript string
+
+//go:embed frontend_assets/delete_account_confirm.css
+var deleteAccountConfirmPageStylesheet string
 
 func (server *serverStruct) deleteAccountConfirmPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	session, sessionToken, err := server.validateRequestSessionToken(r)
@@ -1893,7 +2274,21 @@ func (server *serverStruct) deleteAccountConfirmPageRoute(w http.ResponseWriter,
 		return
 	}
 
-	pageHTML := createDeleteAccountConfirmPageHTML(requestId, sessionToken, accountDeletionToken)
+	pageTitle := "Delete your account | Passwordless auth example"
+
+	bodyHTML := `<h1>Delete your account</h1>
+<p>Are you sure you want to delete your account? This action is permanent and cannot be undone.<p>
+<div id="controls">
+	<button id="confirm-button" class="block-button">Delete account</button>
+	<button id="cancel-button" class="link-button">Cancel</button>
+</div>`
+
+	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
+	pageDataJSONBuilder.AddString("session_token", sessionToken)
+	pageDataJSONBuilder.AddString("account_deletion_token", accountDeletionToken)
+	pageDataJSON := pageDataJSONBuilder.Done()
+
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, deleteAccountConfirmPageScript, deleteAccountConfirmPageStylesheet, pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }
