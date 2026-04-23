@@ -1,12 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"os"
-	"slices"
 	"time"
 
 	"zombiezen.com/go/sqlite"
@@ -136,7 +136,7 @@ func checkLatestSchema(databaseConnection *sqlite.Conn, currentSchemaHash []byte
 	}
 	latestSchemaHash := schemaHashes[0]
 
-	schemaHashMatch := slices.Compare(currentSchemaHash, latestSchemaHash) == 0
+	schemaHashMatch := bytes.Equal(currentSchemaHash, latestSchemaHash)
 
 	return schemaHashMatch, nil
 }
