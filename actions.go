@@ -355,17 +355,18 @@ func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
 		return errorCodeWebauthnCredentialIdAlreadyUsed
 	}
 
-	if passkeySignatureAlgorithm == passkeySignatureAlgorithmEd25519 {
+	switch passkeySignatureAlgorithm {
+	case passkeySignatureAlgorithmEd25519:
 		if len(passkeyPublicKey) != ed25519.PublicKeySize {
 			return errorCodeInvalidPublicKey
 		}
-	} else if passkeySignatureAlgorithm == passkeySignatureAlgorithmECDSAP256SHA256 {
+	case passkeySignatureAlgorithmECDSAP256SHA256:
 		ecdsaPublicKey, err := parseECDSASEC1PublicKey(elliptic.P256(), passkeyPublicKey)
 		if err != nil {
 			return errorCodeInvalidPublicKey
 		}
 		passkeyPublicKey = elliptic.MarshalCompressed(elliptic.P256(), ecdsaPublicKey.X, ecdsaPublicKey.Y)
-	} else if passkeySignatureAlgorithm == passkeySignatureAlgorithmRSASSAPKCS1V15SHA256 {
+	case passkeySignatureAlgorithmRSASSAPKCS1V15SHA256:
 		rsaPublicKey, err := x509.ParsePKCS1PublicKey(passkeyPublicKey)
 		if err != nil {
 			return errorCodeInvalidPublicKey
@@ -377,7 +378,7 @@ func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
 		if rsaPublicKey.E != 65537 {
 			return errorCodeInvalidPublicKey
 		}
-	} else {
+	default:
 		return errorCodeInvalidSignatureAlgorithm
 	}
 
@@ -601,9 +602,10 @@ func (server *serverStruct) verifyPasskeySigninWebauthnSignatureAction(
 	signatureMessage := webauthn.CreateAssertionSignatureMessage(webauthnAuthenticatorData, webauthnClientDataJSON)
 
 	signatureValid := false
-	if passkey.signatureAlgorithm == passkeySignatureAlgorithmEd25519 {
+	switch passkey.signatureAlgorithm {
+	case passkeySignatureAlgorithmEd25519:
 		signatureValid = ed25519.Verify(ed25519.PublicKey(passkey.publicKey), signatureMessage, webauthnSignature)
-	} else if passkey.signatureAlgorithm == passkeySignatureAlgorithmECDSAP256SHA256 {
+	case passkeySignatureAlgorithmECDSAP256SHA256:
 		ecdsaPublicKey, err := parseECDSASEC1CompressedPublicKey(elliptic.P256(), passkey.publicKey)
 		if err != nil {
 			errorMessage := fmt.Sprintf("failed to parse ecdsa compressed sec1 public key: %s", err.Error())
@@ -613,7 +615,7 @@ func (server *serverStruct) verifyPasskeySigninWebauthnSignatureAction(
 
 		messageHash := sha256.Sum256(signatureMessage)
 		signatureValid = ecdsa.VerifyASN1(ecdsaPublicKey, messageHash[:], webauthnSignature)
-	} else if passkey.signatureAlgorithm == passkeySignatureAlgorithmRSASSAPKCS1V15SHA256 {
+	case passkeySignatureAlgorithmRSASSAPKCS1V15SHA256:
 		rsaPublicKey, err := x509.ParsePKCS1PublicKey(passkey.publicKey)
 		if err != nil {
 			errorMessage := fmt.Sprintf("failed to rsa pkcs1 public key: %s", err.Error())
@@ -624,7 +626,7 @@ func (server *serverStruct) verifyPasskeySigninWebauthnSignatureAction(
 		messageHash := sha256.Sum256(signatureMessage)
 		err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, messageHash[:], webauthnSignature)
 		signatureValid = err == nil
-	} else {
+	default:
 		errorMessage := fmt.Sprintf("unknown public key algorithm '%s'", passkey.signatureAlgorithm)
 		server.logActionInternalError(requestId, clientIPAddress, actionVerifyPasskeySigninWebauthnSignature, errorMessage)
 		return "", errorCodeUnexpectedError
@@ -900,8 +902,8 @@ func (server *serverStruct) cancelIdentityVerificationAction(requestId string, c
 		return "", errorCodeSessionMismatch
 	}
 
-	// TODO: deleteIdentityVerificationForEmailAddressUpdate etc
-	if identityVerification.verifyingAction == identityVerificationVerifyingActionEmailAddressUpdate {
+	switch identityVerification.verifyingAction {
+	case identityVerificationVerifyingActionEmailAddressUpdate:
 		err = server.deleteEmailAddressUpdate(identityVerification.verifyingActionId)
 		if errors.Is(err, errItemNotFound) {
 			return "", errorCodeConflict
@@ -911,7 +913,7 @@ func (server *serverStruct) cancelIdentityVerificationAction(requestId string, c
 			server.logActionInternalError(requestId, clientIPAddress, actionCancelIdentityVerification, errorMessage)
 			return "", errorCodeUnexpectedError
 		}
-	} else if identityVerification.verifyingAction == identityVerificationVerifyingActionPasskeyRegistration {
+	case identityVerificationVerifyingActionPasskeyRegistration:
 		err = server.deletePasskeyRegistration(identityVerification.verifyingActionId)
 		if errors.Is(err, errItemNotFound) {
 			return "", errorCodeConflict
@@ -921,7 +923,7 @@ func (server *serverStruct) cancelIdentityVerificationAction(requestId string, c
 			server.logActionInternalError(requestId, clientIPAddress, actionCancelIdentityVerification, errorMessage)
 			return "", errorCodeUnexpectedError
 		}
-	} else if identityVerification.verifyingAction == identityVerificationVerifyingActionPasskeyDeletion {
+	case identityVerificationVerifyingActionPasskeyDeletion:
 		err = server.deletePasskeyDeletion(identityVerification.verifyingActionId)
 		if errors.Is(err, errItemNotFound) {
 			return "", errorCodeConflict
@@ -931,7 +933,7 @@ func (server *serverStruct) cancelIdentityVerificationAction(requestId string, c
 			server.logActionInternalError(requestId, clientIPAddress, actionCancelIdentityVerification, errorMessage)
 			return "", errorCodeUnexpectedError
 		}
-	} else if identityVerification.verifyingAction == identityVerificationVerifyingActionAccountDeletion {
+	case identityVerificationVerifyingActionAccountDeletion:
 		err = server.deleteEmailAddressUpdate(identityVerification.verifyingActionId)
 		if errors.Is(err, errItemNotFound) {
 			return "", errorCodeConflict
@@ -941,7 +943,7 @@ func (server *serverStruct) cancelIdentityVerificationAction(requestId string, c
 			server.logActionInternalError(requestId, clientIPAddress, actionCancelIdentityVerification, errorMessage)
 			return "", errorCodeUnexpectedError
 		}
-	} else {
+	default:
 		errorMessage := fmt.Sprintf("unknown identity verification verifying action '%s'", identityVerification.verifyingAction)
 		server.logActionInternalError(requestId, clientIPAddress, actionCancelIdentityVerification, errorMessage)
 		return "", errorCodeUnexpectedError
@@ -1045,9 +1047,10 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 	signatureMessage := webauthn.CreateAssertionSignatureMessage(webauthnAuthenticatorData, webauthnClientDataJSON)
 
 	signatureValid := false
-	if passkey.signatureAlgorithm == passkeySignatureAlgorithmEd25519 {
+	switch passkey.signatureAlgorithm {
+	case passkeySignatureAlgorithmEd25519:
 		signatureValid = ed25519.Verify(ed25519.PublicKey(passkey.publicKey), signatureMessage, webauthnSignature)
-	} else if passkey.signatureAlgorithm == passkeySignatureAlgorithmECDSAP256SHA256 {
+	case passkeySignatureAlgorithmECDSAP256SHA256:
 		ecdsaPublicKey, err := parseECDSASEC1CompressedPublicKey(elliptic.P256(), passkey.publicKey)
 		if err != nil {
 			errorMessage := fmt.Sprintf("failed to parse ecdsa compressed sec1 public key: %s", err.Error())
@@ -1057,7 +1060,7 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 
 		messageHash := sha256.Sum256(signatureMessage)
 		signatureValid = ecdsa.VerifyASN1(ecdsaPublicKey, messageHash[:], webauthnSignature)
-	} else if passkey.signatureAlgorithm == passkeySignatureAlgorithmRSASSAPKCS1V15SHA256 {
+	case passkeySignatureAlgorithmRSASSAPKCS1V15SHA256:
 		rsaPublicKey, err := x509.ParsePKCS1PublicKey(passkey.publicKey)
 		if err != nil {
 			errorMessage := fmt.Sprintf("failed to rsa pkcs1 public key: %s", err.Error())
@@ -1068,7 +1071,7 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 		messageHash := sha256.Sum256(signatureMessage)
 		err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, messageHash[:], webauthnSignature)
 		signatureValid = err == nil
-	} else {
+	default:
 		errorMessage := fmt.Sprintf("unknown public key algorithm '%s'", passkey.signatureAlgorithm)
 		server.logActionInternalError(requestId, clientIPAddress, actionVerifyIdentityVerificationPasskeyWebauthnSignature, errorMessage)
 		return "", errorCodeUnexpectedError
@@ -1825,17 +1828,18 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialActio
 		return errorCodeInvalidWebauthnAuthenticatorId
 	}
 
-	if signatureAlgorithm == passkeySignatureAlgorithmEd25519 {
+	switch signatureAlgorithm {
+	case passkeySignatureAlgorithmEd25519:
 		if len(publicKey) != ed25519.PublicKeySize {
 			return errorCodeInvalidPublicKey
 		}
-	} else if signatureAlgorithm == passkeySignatureAlgorithmECDSAP256SHA256 {
+	case passkeySignatureAlgorithmECDSAP256SHA256:
 		ecdsaPublicKey, err := parseECDSASEC1PublicKey(elliptic.P256(), publicKey)
 		if err != nil {
 			return errorCodeInvalidPublicKey
 		}
 		publicKey = elliptic.MarshalCompressed(elliptic.P256(), ecdsaPublicKey.X, ecdsaPublicKey.Y)
-	} else if signatureAlgorithm == passkeySignatureAlgorithmRSASSAPKCS1V15SHA256 {
+	case passkeySignatureAlgorithmRSASSAPKCS1V15SHA256:
 		rsaPublicKey, err := x509.ParsePKCS1PublicKey(publicKey)
 		if err != nil {
 			return errorCodeInvalidPublicKey
@@ -1847,7 +1851,7 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialActio
 		if rsaPublicKey.E != 65537 {
 			return errorCodeInvalidPublicKey
 		}
-	} else {
+	default:
 		return errorCodeInvalidSignatureAlgorithm
 	}
 
