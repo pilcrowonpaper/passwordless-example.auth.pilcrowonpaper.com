@@ -4,7 +4,11 @@ const identityVerificationToken = pageDataJSONObject.identity_verification_token
 
 const clientStateEventChannel = new BroadcastChannel("client_state_event");
 clientStateEventChannel.addEventListener("message", (event) => {
-	if (event.data === "session_updated" || event.data === "identity_verification_updated" || event.data === "identity_verification_email_code_verification_updated") {
+	if (
+		event.data === "session_updated" ||
+		event.data === "identity_verification_updated" ||
+		event.data === "identity_verification_email_code_verification_updated"
+	) {
 		window.location.reload();
 	}
 });
@@ -36,7 +40,7 @@ document.getElementById("verify-email-code-form").addEventListener("submit", asy
 	});
 	request.headers.set("Content-Type", "application/json");
 
-    let verifiedAction;
+	let verifiedAction;
 	try {
 		const response = await fetch(request);
 		if (!response.ok) {
@@ -53,25 +57,28 @@ document.getElementById("verify-email-code-form").addEventListener("submit", asy
 					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-                clientStateEventChannel.postMessage("session_updated");
-                
+				clientStateEventChannel.postMessage("session_updated");
+
 				alert("Your session has expired.");
 				window.location.href = "/sign-in";
 				return;
 			}
-			if (resultJSONObject.error_code === "invalid_identity_verification_token" || resultJSONObject.error_code === "session_mismatch") {
+			if (
+				resultJSONObject.error_code === "invalid_identity_verification_token" ||
+				resultJSONObject.error_code === "session_mismatch"
+			) {
 				if (window.location.protocol === "https:") {
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-                clientStateEventChannel.postMessage("identity_verification_updated");
+				clientStateEventChannel.postMessage("identity_verification_updated");
 
 				alert("Your session has expired.");
 				window.location.href = "/account";
 				return;
 			}
-            if (resultJSONObject.error_code === "email_code_not_issued") {
+			if (resultJSONObject.error_code === "email_code_not_issued") {
 				alert("Your session has expired.");
 				window.location.href = "/verify-identity";
 				return;
@@ -89,7 +96,7 @@ document.getElementById("verify-email-code-form").addEventListener("submit", asy
 			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
 		}
 
-        verifiedAction = resultJSONObject.values.verified_action;
+		verifiedAction = resultJSONObject.values.verified_action;
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -97,27 +104,27 @@ document.getElementById("verify-email-code-form").addEventListener("submit", asy
 		return;
 	}
 
-    if (window.location.protocol === "https:") {
+	if (window.location.protocol === "https:") {
 		document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 	} else {
 		document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 	}
-    clientStateEventChannel.postMessage("identity_verification_updated");
+	clientStateEventChannel.postMessage("identity_verification_updated");
 
-    if (verifiedAction === "email_address_update") {
-        window.location.href = "/update-email-address/set-new-email-address"
-    } else if (verifiedAction === "passkey_registration") {
-        window.location.href = "/register-passkey/create-passkey"
-    } else if (verifiedAction === "passkey_deletion") {
-        window.location.href = "/delete-passkey/confirm"
-    } else if (verifiedAction === "account_deletion") {
-        window.location.href = "/delete-account/confirm"
-    } else {
-        console.error(new Error(`Unknown verified action '${verifiedAction}'`));
-        alert("An unexpected error occurred. Please try again.");
+	if (verifiedAction === "email_address_update") {
+		window.location.href = "/update-email-address/set-new-email-address";
+	} else if (verifiedAction === "passkey_registration") {
+		window.location.href = "/register-passkey/create-passkey";
+	} else if (verifiedAction === "passkey_deletion") {
+		window.location.href = "/delete-passkey/confirm";
+	} else if (verifiedAction === "account_deletion") {
+		window.location.href = "/delete-account/confirm";
+	} else {
+		console.error(new Error(`Unknown verified action '${verifiedAction}'`));
+		alert("An unexpected error occurred. Please try again.");
 		submitButtonElement.disabled = false;
 		return;
-    }
+	}
 });
 
 const cancelButtonElement = document.getElementById("cancel-button");
@@ -157,25 +164,28 @@ cancelButtonElement.addEventListener("click", async () => {
 					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-                clientStateEventChannel.postMessage("session_updated");
+				clientStateEventChannel.postMessage("session_updated");
 
 				alert("Your session has expired.");
 				window.location.href = "/sign-in";
 				return;
 			}
-			if (resultJSONObject.error_code === "invalid_identity_verification_token" || resultJSONObject.error_code === "session_mismatch") {
+			if (
+				resultJSONObject.error_code === "invalid_identity_verification_token" ||
+				resultJSONObject.error_code === "session_mismatch"
+			) {
 				if (window.location.protocol === "https:") {
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-                clientStateEventChannel.postMessage("identity_verification_updated");
+				clientStateEventChannel.postMessage("identity_verification_updated");
 
 				alert("Your session has expired.");
 				window.location.href = "/account";
 				return;
 			}
-            if (resultJSONObject.error_code === "email_code_not_issued") {
+			if (resultJSONObject.error_code === "email_code_not_issued") {
 				alert("Your session has expired.");
 				window.location.href = "/verify-identity";
 				return;
@@ -189,7 +199,7 @@ cancelButtonElement.addEventListener("click", async () => {
 		return;
 	}
 
-    clientStateEventChannel.postMessage("identity_verification_updated");
+	clientStateEventChannel.postMessage("identity_verification_updated");
 
 	window.location.href = "/verify-identity";
 });

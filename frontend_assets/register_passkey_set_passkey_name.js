@@ -21,7 +21,7 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 	const actionValuesJSONObject = {
 		session_token: sessionToken,
 		passkey_registration_token: passkeyRegistrationToken,
-        passkey_name: passkeyName,
+		passkey_name: passkeyName,
 	};
 	const requestBodyJSONObject = {
 		action: "set_passkey_registration_passkey_name",
@@ -57,7 +57,10 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 				window.location.href = "/sign-in";
 				return;
 			}
-			if (resultJSONObject.error_code === "invalid_passkey_registration_token" || resultJSONObject.error_code === "session_mismatch") {
+			if (
+				resultJSONObject.error_code === "invalid_passkey_registration_token" ||
+				resultJSONObject.error_code === "session_mismatch"
+			) {
 				clientStateEventChannel.postMessage("passkey_registration_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
@@ -91,4 +94,3 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 
 	window.location.href = "/account";
 });
-

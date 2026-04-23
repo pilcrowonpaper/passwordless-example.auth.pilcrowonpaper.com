@@ -1,10 +1,12 @@
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
 const sessionToken = pageDataJSONObject.session_token;
 const identityVerificationToken = pageDataJSONObject.identity_verification_token;
-const identityVerificationPasskeyVerificationChallenge = Uint8Array.fromBase64(pageDataJSONObject.identity_verification_passkey_verification_challenge);
+const identityVerificationPasskeyVerificationChallenge = Uint8Array.fromBase64(
+	pageDataJSONObject.identity_verification_passkey_verification_challenge,
+);
 const passkeyWebauthnCredentialIds = [];
 for (const encodedCredentialId of pageDataJSONObject.passkey_webauthn_credential_ids) {
-    passkeyWebauthnCredentialIds.push(Uint8Array.fromBase64(encodedCredentialId));
+	passkeyWebauthnCredentialIds.push(Uint8Array.fromBase64(encodedCredentialId));
 }
 
 const clientStateEventChannel = new BroadcastChannel("client_state_event");
@@ -16,27 +18,27 @@ clientStateEventChannel.addEventListener("message", (event) => {
 
 const verifyWithPasskeyButtonElement = document.getElementById("verify-with-passkey-button");
 if (verifyWithPasskeyButtonElement !== null) {
-    verifyWithPasskeyButtonElement.addEventListener("click", async () => {
-        verifyWithPasskeyButtonElement.disabled = true;
+	verifyWithPasskeyButtonElement.addEventListener("click", async () => {
+		verifyWithPasskeyButtonElement.disabled = true;
 
-    	const publicKeyOptions =  {
-    		challenge: identityVerificationPasskeyVerificationChallenge,
-        	allowCredentials: [],
-    		userVerification: "required",
+		const publicKeyOptions = {
+			challenge: identityVerificationPasskeyVerificationChallenge,
+			allowCredentials: [],
+			userVerification: "required",
 			timeout: 5 * 60 * 1000,
-    	}
-    	for (const credentialId of passkeyWebauthnCredentialIds) {
-        	publicKeyOptions.allowCredentials.push({
-        	    id: credentialId,
-        	    type: "public-key"
-        	})
-    	}
+		};
+		for (const credentialId of passkeyWebauthnCredentialIds) {
+			publicKeyOptions.allowCredentials.push({
+				id: credentialId,
+				type: "public-key",
+			});
+		}
 
 		let credential;
 		try {
 			credential = await navigator.credentials.get({
-        		publicKey: publicKeyOptions,
-    		});
+				publicKey: publicKeyOptions,
+			});
 		} catch (error) {
 			console.error(error);
 			verifyWithPasskeyButtonElement.disabled = false;
@@ -47,9 +49,9 @@ if (verifyWithPasskeyButtonElement !== null) {
 		const authenticatorData = new Uint8Array(credential.response.authenticatorData);
 		const clientDataJSON = new Uint8Array(credential.response.clientDataJSON);
 		const signature = new Uint8Array(credential.response.signature);
-    
+
 		const actionValuesJSONObject = {
-        	session_token: sessionToken,
+			session_token: sessionToken,
 			identity_verification_token: identityVerificationToken,
 			webauthn_credential_id: credentialId.toBase64(),
 			webauthn_authenticator_data: authenticatorData.toBase64(),
@@ -68,7 +70,7 @@ if (verifyWithPasskeyButtonElement !== null) {
 		});
 		request.headers.set("Content-Type", "application/json");
 
-    	let verifiedAction;
+		let verifiedAction;
 		try {
 			const response = await fetch(request);
 			if (!response.ok) {
@@ -77,7 +79,7 @@ if (verifyWithPasskeyButtonElement !== null) {
 			}
 			const resultJSONObject = await response.json();
 			if (!resultJSONObject.ok) {
-            	if (resultJSONObject.error_code === "invalid_session_token") {
+				if (resultJSONObject.error_code === "invalid_session_token") {
 					clientStateEventChannel.postMessage("session_updated");
 					if (window.location.protocol === "https:") {
 						document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
@@ -90,8 +92,11 @@ if (verifyWithPasskeyButtonElement !== null) {
 					window.location.href = "/sign-in";
 					return;
 				}
-            	if (resultJSONObject.error_code === "invalid_identity_verification_token" || resultJSONObject.error_code === "session_mismatch") {
-                	clientStateEventChannel.postMessage("identity_verification_updated");
+				if (
+					resultJSONObject.error_code === "invalid_identity_verification_token" ||
+					resultJSONObject.error_code === "session_mismatch"
+				) {
+					clientStateEventChannel.postMessage("identity_verification_updated");
 					if (window.location.protocol === "https:") {
 						document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 					} else {
@@ -100,13 +105,13 @@ if (verifyWithPasskeyButtonElement !== null) {
 					alert("Your session has expired.");
 					window.location.href = "/account";
 					return;
-            	}
-            	if (resultJSONObject.error_code === "passkey_not_found") {
+				}
+				if (resultJSONObject.error_code === "passkey_not_found") {
 					alert("This passkey has been deleted.");
 					verifyWithPasskeyButtonElement.disabled = false;
 					return;
 				}
-            	if (resultJSONObject.error_code === "invalid_webauthn_signature") {
+				if (resultJSONObject.error_code === "invalid_webauthn_signature") {
 					alert("Please try again.");
 					verifyWithPasskeyButtonElement.disabled = false;
 					return;
@@ -114,7 +119,7 @@ if (verifyWithPasskeyButtonElement !== null) {
 				throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
 			}
 
-    	    verifiedAction = resultJSONObject.values.verified_action;
+			verifiedAction = resultJSONObject.values.verified_action;
 		} catch (error) {
 			console.error(error);
 			alert("An unexpected error occurred. Please try again.");
@@ -122,31 +127,31 @@ if (verifyWithPasskeyButtonElement !== null) {
 			return;
 		}
 
-    	clientStateEventChannel.postMessage("identity_verification_updated");
+		clientStateEventChannel.postMessage("identity_verification_updated");
 
 		if (verifiedAction === "email_address_update") {
-    	    window.location.href = "/update-email-address/set-new-email-address"
-    	} else if (verifiedAction === "passkey_registration") {
-    	    window.location.href = "/register-passkey/create-passkey"
-    	} else if (verifiedAction === "passkey_deletion") {
-    	    window.location.href = "/delete-passkey/confirm"
-    	} else if (verifiedAction === "account_deletion") {
-    	    window.location.href = "/delete-account/confirm"
-    	} else {
-    	    console.error(new Error(`Unknown verified action '${verifiedAction}'`));
-    	    alert("An unexpected error occurred. Please try again.");
+			window.location.href = "/update-email-address/set-new-email-address";
+		} else if (verifiedAction === "passkey_registration") {
+			window.location.href = "/register-passkey/create-passkey";
+		} else if (verifiedAction === "passkey_deletion") {
+			window.location.href = "/delete-passkey/confirm";
+		} else if (verifiedAction === "account_deletion") {
+			window.location.href = "/delete-account/confirm";
+		} else {
+			console.error(new Error(`Unknown verified action '${verifiedAction}'`));
+			alert("An unexpected error occurred. Please try again.");
 			verifyWithPasskeyButtonElement.disabled = false;
 			return;
-    	}
-    });
+		}
+	});
 }
 
 const verifyWithEmailCodeButtonElement = document.getElementById("verify-with-email-code-button");
 verifyWithEmailCodeButtonElement.addEventListener("click", async () => {
 	verifyWithEmailCodeButtonElement.disabled = true;
 
-    const actionValuesJSONObject = {
-        session_token: sessionToken,
+	const actionValuesJSONObject = {
+		session_token: sessionToken,
 		identity_verification_token: identityVerificationToken,
 	};
 	const requestBodyJSONObject = {
@@ -169,7 +174,7 @@ verifyWithEmailCodeButtonElement.addEventListener("click", async () => {
 		}
 		const resultJSONObject = await response.json();
 		if (!resultJSONObject.ok) {
-            if (resultJSONObject.error_code === "invalid_session_token") {
+			if (resultJSONObject.error_code === "invalid_session_token") {
 				clientStateEventChannel.postMessage("session_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
@@ -182,8 +187,11 @@ verifyWithEmailCodeButtonElement.addEventListener("click", async () => {
 				window.location.href = "/sign-in";
 				return;
 			}
-            if (resultJSONObject.error_code === "invalid_identity_verification_token" || resultJSONObject.error_code === "session_mismatch") {
-                clientStateEventChannel.postMessage("identity_verification_updated");
+			if (
+				resultJSONObject.error_code === "invalid_identity_verification_token" ||
+				resultJSONObject.error_code === "session_mismatch"
+			) {
+				clientStateEventChannel.postMessage("identity_verification_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
@@ -192,7 +200,7 @@ verifyWithEmailCodeButtonElement.addEventListener("click", async () => {
 				alert("Your session has expired.");
 				window.location.href = "/account";
 				return;
-            }
+			}
 			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
 		}
 	} catch (error) {
@@ -202,14 +210,14 @@ verifyWithEmailCodeButtonElement.addEventListener("click", async () => {
 		return;
 	}
 
-    clientStateEventChannel.postMessage("identity_verification_updated");
+	clientStateEventChannel.postMessage("identity_verification_updated");
 
-	window.location.href = "/verify-identity/verify-email-code"
+	window.location.href = "/verify-identity/verify-email-code";
 });
 
 const cancelButtonElement = document.getElementById("cancel-button");
 cancelButtonElement.addEventListener("click", async () => {
-    cancelButtonElement.disabled = true;
+	cancelButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
 		session_token: sessionToken,
@@ -249,8 +257,11 @@ cancelButtonElement.addEventListener("click", async () => {
 				window.location.href = "/sign-in";
 				return;
 			}
-            if (resultJSONObject.error_code === "invalid_identity_verification_token" || resultJSONObject.error_code === "session_mismatch") {
-                clientStateEventChannel.postMessage("identity_verification_updated");
+			if (
+				resultJSONObject.error_code === "invalid_identity_verification_token" ||
+				resultJSONObject.error_code === "session_mismatch"
+			) {
+				clientStateEventChannel.postMessage("identity_verification_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
@@ -259,7 +270,7 @@ cancelButtonElement.addEventListener("click", async () => {
 				alert("Your session has expired.");
 				window.location.href = "/account";
 				return;
-            }
+			}
 			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
 		}
 
@@ -276,37 +287,37 @@ cancelButtonElement.addEventListener("click", async () => {
 	} else {
 		document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 	}
-    clientStateEventChannel.postMessage("identity_verification_updated");
-    
-    if (cancelledAction === "email_address_update") {
-        if (window.location.protocol === "https:") {
-		    document.cookie = `email_address_update_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-	    } else {
-	    	document.cookie = `email_address_update_token=; Max-Age=0; SameSite=Lax; Path=/`;
-	    }
-        clientStateEventChannel.postMessage("email_address_update_updated");
-    } else if (cancelledAction === "passkey_registration") {
-        if (window.location.protocol === "https:") {
-		    document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-	    } else {
-	    	document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
-	    }
-        clientStateEventChannel.postMessage("passkey_registration_updated");
-    } else if (cancelledAction === "passkey_deletion") {
-        if (window.location.protocol === "https:") {
-		    document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-	    } else {
-	    	document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/`;
-	    }
-        clientStateEventChannel.postMessage("passkey_deletion_updated");
-    } else if (cancelledAction === "account_deletion") {
-        if (window.location.protocol === "https:") {
-		    document.cookie = `account_deletion_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-	    } else {
-	    	document.cookie = `account_deletion_token=; Max-Age=0; SameSite=Lax; Path=/`;
-	    }
-        clientStateEventChannel.postMessage("account_deletion_updated");
-    }
+	clientStateEventChannel.postMessage("identity_verification_updated");
+
+	if (cancelledAction === "email_address_update") {
+		if (window.location.protocol === "https:") {
+			document.cookie = `email_address_update_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
+		} else {
+			document.cookie = `email_address_update_token=; Max-Age=0; SameSite=Lax; Path=/`;
+		}
+		clientStateEventChannel.postMessage("email_address_update_updated");
+	} else if (cancelledAction === "passkey_registration") {
+		if (window.location.protocol === "https:") {
+			document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
+		} else {
+			document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
+		}
+		clientStateEventChannel.postMessage("passkey_registration_updated");
+	} else if (cancelledAction === "passkey_deletion") {
+		if (window.location.protocol === "https:") {
+			document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
+		} else {
+			document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/`;
+		}
+		clientStateEventChannel.postMessage("passkey_deletion_updated");
+	} else if (cancelledAction === "account_deletion") {
+		if (window.location.protocol === "https:") {
+			document.cookie = `account_deletion_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
+		} else {
+			document.cookie = `account_deletion_token=; Max-Age=0; SameSite=Lax; Path=/`;
+		}
+		clientStateEventChannel.postMessage("account_deletion_updated");
+	}
 
 	window.location.href = "/account";
-})
+});

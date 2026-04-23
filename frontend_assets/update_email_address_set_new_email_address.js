@@ -56,7 +56,10 @@ document.getElementById("set-new-email-address-form").addEventListener("submit",
 				window.location.href = "/sign-in";
 				return;
 			}
-			if (resultJSONObject.error_code === "invalid_email_address_update_token" || resultJSONObject.error_code === "session_mismatch") {
+			if (
+				resultJSONObject.error_code === "invalid_email_address_update_token" ||
+				resultJSONObject.error_code === "session_mismatch"
+			) {
 				clientStateEventChannel.postMessage("email_address_update_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `email_address_update_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
@@ -133,7 +136,10 @@ cancelButtonElement.addEventListener("click", async () => {
 				window.location.href = "/sign-in";
 				return;
 			}
-			if (resultJSONObject.error_code === "invalid_email_address_update_token" || resultJSONObject.error_code === "session_mismatch") {
+			if (
+				resultJSONObject.error_code === "invalid_email_address_update_token" ||
+				resultJSONObject.error_code === "session_mismatch"
+			) {
 				clientStateEventChannel.postMessage("email_address_update_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `email_address_update_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;

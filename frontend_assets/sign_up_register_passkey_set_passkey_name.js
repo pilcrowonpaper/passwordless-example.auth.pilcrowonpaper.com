@@ -19,7 +19,7 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 
 	const actionValuesJSONObject = {
 		signup_token: signupToken,
-        passkey_name: passkeyName,
+		passkey_name: passkeyName,
 	};
 	const requestBodyJSONObject = {
 		action: "set_signup_passkey_name",
@@ -60,7 +60,7 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 				return;
 			}
 			if (resultJSONObject.error_code === "email_address_already_used") {
-                if (window.location.protocol === "https:") {
+				if (window.location.protocol === "https:") {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
@@ -70,7 +70,7 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 				alert("This email address is already linked to an existing account.");
 				window.location.href = "/sign-up";
 				return;
-            }
+			}
 			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
 		}
 
@@ -84,12 +84,12 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 
 	if (window.location.protocol === "https:") {
 		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/; Secure`;
-        document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
+		document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 	} else {
 		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/`;
-        document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
+		document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
 	}
-    clientStateEventChannel.postMessage("signup_updated");
+	clientStateEventChannel.postMessage("signup_updated");
 	clientStateEventChannel.postMessage("session_updated");
 
 	window.location.href = "/account";

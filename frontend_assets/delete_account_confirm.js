@@ -51,7 +51,10 @@ confirmButtonElement.addEventListener("click", async () => {
 				window.location.href = "/sign-in";
 				return;
 			}
-			if (resultJSONObject.error_code === "invalid_account_deletion_token" || resultJSONObject.error_code === "session_mismatch") {
+			if (
+				resultJSONObject.error_code === "invalid_account_deletion_token" ||
+				resultJSONObject.error_code === "session_mismatch"
+			) {
 				clientStateEventChannel.postMessage("account_deletion_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `account_deletion_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
@@ -123,7 +126,10 @@ cancelButtonElement.addEventListener("click", async () => {
 				window.location.href = "/sign-in";
 				return;
 			}
-			if (resultJSONObject.error_code === "invalid_account_deletion_token" || resultJSONObject.error_code === "session_mismatch") {
+			if (
+				resultJSONObject.error_code === "invalid_account_deletion_token" ||
+				resultJSONObject.error_code === "session_mismatch"
+			) {
 				clientStateEventChannel.postMessage("account_deletion_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `account_deletion_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;

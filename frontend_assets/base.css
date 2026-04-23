@@ -92,7 +92,7 @@ p > a {
 }
 
 .link-button {
-	display: block;;
+	display: block;
 	color: var(--link-color);
 	text-decoration: underline;
 	cursor: pointer;

@@ -11,79 +11,83 @@ clientStateEventChannel.addEventListener("message", (event) => {
 	}
 });
 
-document.getElementById("sign-in-with-email-code-form").addEventListener("submit", async (event) => {
-	event.preventDefault();
+document
+	.getElementById("sign-in-with-email-code-form")
+	.addEventListener("submit", async (event) => {
+		event.preventDefault();
 
-	const submitButtonElement = document.getElementById("sign-in-with-email-code-form-submit-button");
-	submitButtonElement.disabled = true;
+		const submitButtonElement = document.getElementById(
+			"sign-in-with-email-code-form-submit-button",
+		);
+		submitButtonElement.disabled = true;
 
-	const formData = new FormData(event.target);
-	const emailAddress = formData.get("email_address");
+		const formData = new FormData(event.target);
+		const emailAddress = formData.get("email_address");
 
-	const actionValuesJSONObject = {
-		email_address: emailAddress
-	};
-	const requestBodyJSONObject = {
-		action: "start_email_code_signin",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
+		const actionValuesJSONObject = {
+			email_address: emailAddress,
+		};
+		const requestBodyJSONObject = {
+			action: "start_email_code_signin",
+			values: actionValuesJSONObject,
+		};
+		const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
+		const request = new Request("/action", {
+			method: "POST",
+			body: requestBody,
+		});
+		request.headers.set("Content-Type", "application/json");
+
+		let emailCodeSigninToken;
+		try {
+			const response = await fetch(request);
+			if (!response.ok) {
+				await response.body.cancel();
+				throw new Error(`Unexpected response status code ${response.status}`);
+			}
+			const resultJSONObject = await response.json();
+			if (!resultJSONObject.ok) {
+				if (resultJSONObject.error_code === "invalid_email_address") {
+					alert("Please enter a valid email address.");
+					submitButtonElement.disabled = false;
+					return;
+				}
+				if (resultJSONObject.error_code === "user_not_found") {
+					alert("No account found with this email address.");
+					submitButtonElement.disabled = false;
+					return;
+				}
+				if (resultJSONObject.error_code === "rate_limited") {
+					alert("Too many attempts. Please try again later.");
+					submitButtonElement.disabled = false;
+					return;
+				}
+				throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
+			}
+
+			emailCodeSigninToken = resultJSONObject.values.email_code_signin_token;
+		} catch (error) {
+			console.error(error);
+			alert("An unexpected error occurred. Please try again.");
+			submitButtonElement.disabled = false;
+			return;
+		}
+
+		if (window.location.protocol === "https:") {
+			document.cookie = `email_code_signin_token=${emailCodeSigninToken}; Max-Age=3600; SameSite=Lax; Path=/; Secure`;
+		} else {
+			document.cookie = `email_code_signin_token=${emailCodeSigninToken}; Max-Age=3600; SameSite=Lax; Path=/`;
+		}
+		clientStateEventChannel.postMessage("email_code_signin_updated");
+
+		window.location.href = "/sign-in/verify-email-code";
 	});
-	request.headers.set("Content-Type", "application/json");
-
-	let emailCodeSigninToken;
-	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_email_address") {
-				alert("Please enter a valid email address.");
-				submitButtonElement.disabled = false;
-				return;
-			}
-			if (resultJSONObject.error_code === "user_not_found") {
-				alert("No account found with this email address.");
-				submitButtonElement.disabled = false;
-				return;
-			}
-			if (resultJSONObject.error_code === "rate_limited") {
-				alert("Too many attempts. Please try again later.");
-				submitButtonElement.disabled = false;
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
-
-		emailCodeSigninToken = resultJSONObject.values.email_code_signin_token;
-	} catch (error) {
-		console.error(error);
-		alert("An unexpected error occurred. Please try again.");
-		submitButtonElement.disabled = false;
-		return;
-	}
-
-	if (window.location.protocol === "https:") {
-		document.cookie = `email_code_signin_token=${emailCodeSigninToken}; Max-Age=3600; SameSite=Lax; Path=/; Secure`;
-	} else {
-		document.cookie = `email_code_signin_token=${emailCodeSigninToken}; Max-Age=3600; SameSite=Lax; Path=/`;
-	}
-	clientStateEventChannel.postMessage("email_code_signin_updated");
-
-	window.location.href = "/sign-in/verify-email-code";
-});
 
 const conditionalWebauthnRequestAbortController = new AbortController();
 setTimeout(conditionalWebauthnRequestAbortController.abort, 50 * 60 * 1000);
 
-const signInWithPasskeyButtonElement = document.getElementById("sign-in-with-passkey-button")
+const signInWithPasskeyButtonElement = document.getElementById("sign-in-with-passkey-button");
 signInWithPasskeyButtonElement.addEventListener("click", async () => {
 	signInWithPasskeyButtonElement.disabled = true;
 
@@ -95,7 +99,9 @@ signInWithPasskeyButtonElement.addEventListener("click", async () => {
 			action: "start_passkey_signin",
 			values: startPasskeySigninActionValuesJSONObject,
 		};
-		const startPasskeySigninActionRequestBody = JSON.stringify(startPasskeySigninActionRequestBodyJSONObject);
+		const startPasskeySigninActionRequestBody = JSON.stringify(
+			startPasskeySigninActionRequestBodyJSONObject,
+		);
 
 		const startPasskeySigninActionRequest = new Request("/action", {
 			method: "POST",
@@ -119,7 +125,9 @@ signInWithPasskeyButtonElement.addEventListener("click", async () => {
 				throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
 			}
 			passkeySigninId = resultJSONObject.values.passkey_signin_id;
-			passkeySigninChallenge = Uint8Array.fromBase64(resultJSONObject.values.passkey_signin_challenge);
+			passkeySigninChallenge = Uint8Array.fromBase64(
+				resultJSONObject.values.passkey_signin_challenge,
+			);
 			passkeySigninRefreshAt = new Date(Date.now() + 50 * 60 * 1000);
 		} catch (error) {
 			console.error(error);
@@ -133,12 +141,12 @@ signInWithPasskeyButtonElement.addEventListener("click", async () => {
 	let credential;
 	try {
 		credential = await navigator.credentials.get({
-        	publicKey: {
-            	challenge: passkeySigninChallenge,
-            	userVerification: "required",
+			publicKey: {
+				challenge: passkeySigninChallenge,
+				userVerification: "required",
 				timeout: 5 * 60 * 1000,
-        	},
-    	});
+			},
+		});
 	} catch (error) {
 		console.error(error);
 		signInWithPasskeyButtonElement.disabled = false;
@@ -152,7 +160,12 @@ signInWithPasskeyButtonElement.addEventListener("click", async () => {
 
 	let sessionToken;
 	try {
-		const result = await verifyPasskeySigninWebauthnSignatureAction(credentialId, authenticatorData, clientDataJSON, signature);
+		const result = await verifyPasskeySigninWebauthnSignatureAction(
+			credentialId,
+			authenticatorData,
+			clientDataJSON,
+			signature,
+		);
 		if (!result.ok) {
 			if (result.errorCode === "passkey_signin_not_found") {
 				alert("Please try again.");
@@ -196,16 +209,16 @@ async function startConditionalMediationCredentialRequest() {
 	let credential;
 	try {
 		credential = await navigator.credentials.get({
-        	publicKey: {
-        	    challenge: passkeySigninChallenge,
-        	    userVerification: "required",
-        	},
+			publicKey: {
+				challenge: passkeySigninChallenge,
+				userVerification: "required",
+			},
 			mediation: "conditional",
 			signal: conditionalWebauthnRequestAbortController.signal,
-    	});
+		});
 	} catch (error) {
 		console.error(error);
-		return
+		return;
 	}
 
 	signInWithPasskeyButtonElement.disabled = true;
@@ -217,7 +230,12 @@ async function startConditionalMediationCredentialRequest() {
 
 	let sessionToken;
 	try {
-		const result = await verifyPasskeySigninWebauthnSignatureAction(credentialId, authenticatorData, clientDataJSON, signature);
+		const result = await verifyPasskeySigninWebauthnSignatureAction(
+			credentialId,
+			authenticatorData,
+			clientDataJSON,
+			signature,
+		);
 		if (!result.ok) {
 			if (result.errorCode === "passkey_signin_not_found") {
 				alert("Please try again.");
@@ -250,7 +268,12 @@ async function startConditionalMediationCredentialRequest() {
 	window.location.href = "/account";
 }
 
-async function verifyPasskeySigninWebauthnSignatureAction(credentialId, authenticatorData, clientDataJSON, signature) {
+async function verifyPasskeySigninWebauthnSignatureAction(
+	credentialId,
+	authenticatorData,
+	clientDataJSON,
+	signature,
+) {
 	const actionValuesJSONObject = {
 		passkey_signin_id: passkeySigninId,
 		webauthn_credential_id: credentialId.toBase64(),
@@ -289,7 +312,7 @@ async function verifyPasskeySigninWebauthnSignatureAction(credentialId, authenti
 			ok: false,
 			errorCode: resultJSONObject.error_code,
 		};
-		return result
+		return result;
 	}
 
 	const result = {

@@ -152,7 +152,7 @@ for (const deletePasskeyButtonElement of deletePasskeyButtonElements) {
 		clientStateEventChannel.postMessage("identity_verification_updated");
 
 		window.location.href = "/verify-identity";
-	})
+	});
 }
 
 const registerPasskeyButtonElement = document.getElementById("register-passkey-button");
