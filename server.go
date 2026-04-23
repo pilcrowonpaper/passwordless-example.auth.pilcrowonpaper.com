@@ -162,7 +162,7 @@ func (server *serverStruct) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		requestId = generateLongItemId()
 	}
 
-	clientIPAddress := r.Header.Get("CF-Connecting-IP")
+	clientIPAddress := r.Header.Get("X-Real-IP")
 	if clientIPAddress != "" {
 		rateLimitAllowed := server.requestRateLimit.Consume(clientIPAddress)
 		if !rateLimitAllowed {
