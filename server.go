@@ -58,8 +58,6 @@ type serverLoggingStruct struct {
 var webauthnAuthenticatorsJSON string
 
 func createServer(emailClient emailClientInterface, origin string, webauthnRelyingPartyId string, logging serverLoggingStruct) (*serverStruct, error) {
-	databaseFilename := "main.db"
-
 	databaseReadConnectionPool, err := sqlitex.NewPool(databaseFilename, sqlitex.PoolOptions{
 		Flags:    sqlite.OpenReadWrite | sqlite.OpenWAL,
 		PoolSize: runtime.NumCPU(),

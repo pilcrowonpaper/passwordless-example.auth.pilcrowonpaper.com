@@ -1,5 +1,5 @@
 .env
-main.db
-main.db-*
+data.db
+data.db-*
 
 .zed

@@ -21,7 +21,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 )
 
-const databaseFilename = "main.db"
+const databaseFilename = "data.db"
 
 //go:embed schema.sql
 var schemaSQLScript string
