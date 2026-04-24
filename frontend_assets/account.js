@@ -156,75 +156,82 @@ for (const deletePasskeyButtonElement of deletePasskeyButtonElements) {
 }
 
 const registerPasskeyButtonElement = document.getElementById("register-passkey-button");
-registerPasskeyButtonElement.addEventListener("click", async () => {
-	registerPasskeyButtonElement.disabled = true;
+if (registerPasskeyButtonElement !== null) {
+	registerPasskeyButtonElement.addEventListener("click", async () => {
+		registerPasskeyButtonElement.disabled = true;
 
-	const actionValuesJSONObject = {
-		session_token: sessionToken,
-	};
-	const requestBodyJSONObject = {
-		action: "start_passkey_registration",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
+		const actionValuesJSONObject = {
+			session_token: sessionToken,
+		};
+		const requestBodyJSONObject = {
+			action: "start_passkey_registration",
+			values: actionValuesJSONObject,
+		};
+		const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
+		const request = new Request("/action", {
+			method: "POST",
+			body: requestBody,
+		});
+		request.headers.set("Content-Type", "application/json");
 
-	let passkeyRegistrationToken;
-	let identityVerificationToken;
-	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_session_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
+		let passkeyRegistrationToken;
+		let identityVerificationToken;
+		try {
+			const response = await fetch(request);
+			if (!response.ok) {
+				await response.body.cancel();
+				throw new Error(`Unexpected response status code ${response.status}`);
+			}
+			const resultJSONObject = await response.json();
+			if (!resultJSONObject.ok) {
+				if (resultJSONObject.error_code === "invalid_session_token") {
+					if (window.location.protocol === "https:") {
+						document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
+					} else {
+						document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
+					}
+					clientStateEventChannel.postMessage("session_updated");
+
+					alert("Your session has expired.");
+					window.location.href = "/sign-in";
+					return;
 				}
-				clientStateEventChannel.postMessage("session_updated");
+				if (resultJSONObject.error_code === "passkey_limit_reached") {
+					alert("Passkey limit reached.");
+					registerPasskeyButtonElement.disabled = false;
+					return;
+				}
+				if (resultJSONObject.error_code === "rate_limited") {
+					alert("Too many attempts. Please try again later.");
+					registerPasskeyButtonElement.disabled = false;
+					return;
+				}
+				throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
+			}
 
-				alert("Your session has expired.");
-				window.location.href = "/sign-in";
-				return;
-			}
-			if (resultJSONObject.error_code === "rate_limited") {
-				alert("Too many attempts. Please try again later.");
-				registerPasskeyButtonElement.disabled = false;
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
+			passkeyRegistrationToken = resultJSONObject.values.passkey_registration_token;
+			identityVerificationToken = resultJSONObject.values.identity_verification_token;
+		} catch (error) {
+			console.error(error);
+			alert("An unexpected error occurred. Please try again.");
+			registerPasskeyButtonElement.disabled = false;
+			return;
 		}
 
-		passkeyRegistrationToken = resultJSONObject.values.passkey_registration_token;
-		identityVerificationToken = resultJSONObject.values.identity_verification_token;
-	} catch (error) {
-		console.error(error);
-		alert("An unexpected error occurred. Please try again.");
-		registerPasskeyButtonElement.disabled = false;
-		return;
-	}
+		if (window.location.protocol === "https:") {
+			document.cookie = `passkey_registration_token=${passkeyRegistrationToken}; Max-Age=4800; SameSite=Lax; Path=/; Secure`;
+			document.cookie = `identity_verification_token=${identityVerificationToken}; Max-Age=3600; SameSite=Lax; Path=/; Secure`;
+		} else {
+			document.cookie = `passkey_registration_token=${passkeyRegistrationToken}; Max-Age=4800; SameSite=Lax; Path=/;`;
+			document.cookie = `identity_verification_token=${identityVerificationToken}; Max-Age=3600; SameSite=Lax; Path=/;`;
+		}
+		clientStateEventChannel.postMessage("passkey_registration_updated");
+		clientStateEventChannel.postMessage("identity_verification_updated");
 
-	if (window.location.protocol === "https:") {
-		document.cookie = `passkey_registration_token=${passkeyRegistrationToken}; Max-Age=4800; SameSite=Lax; Path=/; Secure`;
-		document.cookie = `identity_verification_token=${identityVerificationToken}; Max-Age=3600; SameSite=Lax; Path=/; Secure`;
-	} else {
-		document.cookie = `passkey_registration_token=${passkeyRegistrationToken}; Max-Age=4800; SameSite=Lax; Path=/;`;
-		document.cookie = `identity_verification_token=${identityVerificationToken}; Max-Age=3600; SameSite=Lax; Path=/;`;
-	}
-	clientStateEventChannel.postMessage("passkey_registration_updated");
-	clientStateEventChannel.postMessage("identity_verification_updated");
-
-	window.location.href = "/verify-identity";
-});
+		window.location.href = "/verify-identity";
+	});
+}
 
 const signOutButtonElement = document.getElementById("sign-out-button");
 signOutButtonElement.addEventListener("click", async () => {

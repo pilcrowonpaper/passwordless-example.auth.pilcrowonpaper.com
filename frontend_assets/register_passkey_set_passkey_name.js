@@ -76,6 +76,11 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 				submitButtonElement.disabled = false;
 				return;
 			}
+			if (resultJSONObject.error_code === "passkey_limit_reached") {
+				alert("Passkey limit reached.");
+				submitButtonElement.disabled = false;
+				return;
+			}
 			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
 		}
 	} catch (error) {

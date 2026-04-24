@@ -1185,6 +1185,11 @@ func (server *serverStruct) accountPageRoute(w http.ResponseWriter, r *http.Requ
 		passkeyListHTML = passkeyListHTMLBuilder.String()
 	}
 
+	registerPasskeyButtonHTML := ""
+	if len(passkeys) < maxPasskeyCountLimit {
+		registerPasskeyButtonHTML = `<button id="register-passkey-button" class="block-button">Register passkey</button>`
+	}
+
 	pageTitle := "My account | Passwordless auth example"
 	bodyHTMLTemplate := `<h1>My account</h1>
 <section>
@@ -1197,7 +1202,7 @@ func (server *serverStruct) accountPageRoute(w http.ResponseWriter, r *http.Requ
 	<h2>Passkeys</h2>
 	<p id="passkeys-description">Passkeys are secure login credentials stored on your device, password manager, or security key that allow you to sign in using your device PIN or biometrics.</p>
 	%s
-	<button id="register-passkey-button" class="block-button">Register passkey</button>
+	%s
 </section>
 <section>
 	<h2>Sign out</h2>
@@ -1212,7 +1217,7 @@ func (server *serverStruct) accountPageRoute(w http.ResponseWriter, r *http.Requ
 	<button id="delete-account-button" class="block-button">Delete account</button>
 </section>`
 
-	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(user.id), html.EscapeString(user.emailAddress), passkeyListHTML)
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(user.id), html.EscapeString(user.emailAddress), passkeyListHTML, registerPasskeyButtonHTML)
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
 	pageDataJSONBuilder.AddString("session_token", sessionToken)
@@ -2038,9 +2043,6 @@ func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.Respons
 //go:embed frontend_assets/register_passkey_set_passkey_name.js
 var registerPasskeySetPasskeyNamePageScript string
 
-//go:embed frontend_assets/register_passkey_set_passkey_name.css
-var registerPasskeySetPasskeyNamePageStylesheet string
-
 func (server *serverStruct) registerPasskeySetPasskeyNamePageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
 	session, sessionToken, err := server.validateRequestSessionToken(r)
 	if errors.Is(err, errInvalidSessionToken) {
@@ -2138,7 +2140,7 @@ func (server *serverStruct) registerPasskeySetPasskeyNamePageRoute(w http.Respon
 	pageDataJSONBuilder.AddString("passkey_registration_token", passkeyRegistrationToken)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
-	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, registerPasskeySetPasskeyNamePageScript, registerPasskeySetPasskeyNamePageStylesheet, pageDataJSON)
+	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, registerPasskeySetPasskeyNamePageScript, "", pageDataJSON)
 
 	writePageHTMLResponse(w, 200, pageHTML)
 }

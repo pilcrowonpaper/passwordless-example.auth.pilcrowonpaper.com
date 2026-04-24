@@ -1680,7 +1680,7 @@ func (server *serverStruct) startPasskeyRegistrationAction(requestId string, cli
 		server.logActionInternalError(requestId, clientIPAddress, actionStartPasskeyRegistration, errorMessage)
 		return "", "", errorCodeUnexpectedError
 	}
-	if userPasskeyCount > maxPasskeyCountLimit {
+	if userPasskeyCount >= maxPasskeyCountLimit {
 		return "", "", errorCodePasskeyLimitReached
 	}
 
@@ -1933,7 +1933,7 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyNameAction(requestId st
 		server.logActionInternalError(requestId, clientIPAddress, actionSetPasskeyRegistrationPasskeyName, errorMessage)
 		return errorCodeUnexpectedError
 	}
-	if userPasskeyCount > maxPasskeyCountLimit {
+	if userPasskeyCount >= maxPasskeyCountLimit {
 		return errorCodePasskeyLimitReached
 	}
 
