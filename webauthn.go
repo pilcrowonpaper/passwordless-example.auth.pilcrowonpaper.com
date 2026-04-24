@@ -145,7 +145,7 @@ func (server *serverStruct) verifyPasskeyVerificationWebauthnSignature(
 	case passkeySignatureAlgorithmRSASSAPKCS1V15SHA256:
 		rsaPublicKey, err := x509.ParsePKCS1PublicKey(passkey.publicKey)
 		if err != nil {
-			return false, fmt.Errorf("failed to rsa pkcs1 public key: %s", err.Error())
+			return false, fmt.Errorf("failed to parse rsa pkcs1 public key: %s", err.Error())
 		}
 
 		messageHash := sha256.Sum256(signatureMessage)
