@@ -1,7 +1,5 @@
 package main
 
-// TODO: Store webauthn challenge in memory?
-
 import (
 	"crypto"
 	"crypto/ecdsa"

@@ -1554,7 +1554,7 @@ func (server *serverStruct) signInVerifyEmailCodePageRoute(w http.ResponseWriter
 	pageTitle := "Sign in with email code | Passwordless auth example"
 
 	bodyHTMLTemplate := `<h1>Sign in with email code</h1>
-<p>We sent a one-time code to %s.</p> 
+<p>We sent a one-time code to %s.</p>
 <form id="verify-email-code-form">
 	<label for="verify-email-code-form-email-code-input">Code</label>
 	<input id="verify-email-code-form-email-code-input" name="email_code" autocomplete="one-time-code" required/>
@@ -1717,7 +1717,7 @@ func (server *serverStruct) verifyIdentityVerifyEmailCodePageRoute(w http.Respon
 	pageTitle := "Verify identity with email code | Passwordless auth example"
 
 	bodyHTMLTemplate := `<h1>Verify identity with email code</h1>
-<p>We sent a one-time code to %s.</p> 
+<p>We sent a one-time code to %s.</p>
 <form id="verify-email-code-form">
 	<label for="verify-email-code-form-email-code-input">Code</label>
 	<input id="verify-email-code-form-email-code-input" name="email_code" autocomplete="one-time-code" required/>
