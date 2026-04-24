@@ -12,57 +12,115 @@ import (
 	"github.com/pilcrowonpaper/go-json"
 )
 
-func ParseAssertionAuthenticatorData(authenticatorDataBytes []byte) (AssertionAuthenticatorDataStruct, error) {
+func ParseAuthenticatorData(authenticatorDataBytes []byte) (AuthenticatorStruct, error) {
 	if len(authenticatorDataBytes) < 32 {
-		return AssertionAuthenticatorDataStruct{}, errors.New("invalid relying party id")
+		return AuthenticatorStruct{}, errors.New("invalid relying party id")
 	}
 	relyingPartyId := authenticatorDataBytes[:32]
 
 	if len(authenticatorDataBytes) < 33 {
-		return AssertionAuthenticatorDataStruct{}, errors.New("invalid flags")
+		return AuthenticatorStruct{}, errors.New("invalid flags")
 	}
 
 	userPresent := authenticatorDataBytes[32]&0x01 == 1
 	userVerified := (authenticatorDataBytes[32]>>2)&0x1 == 1
 	backupEligible := (authenticatorDataBytes[32]>>3)&0x1 == 1
 	backedUp := (authenticatorDataBytes[32]>>4)&0x1 == 1
-	attestedCredentialDataDefined := (authenticatorDataBytes[32]>>6)&0x1 == 1
+	attestedCredentialDataIncluded := (authenticatorDataBytes[32]>>6)&0x1 == 1
+	extensionDataIncluded := (authenticatorDataBytes[32]>>7)&0x1 == 1
+
+	if extensionDataIncluded {
+		return AuthenticatorStruct{}, errors.New("extension data included")
+	}
 
 	if len(authenticatorDataBytes) < 37 {
-		return AssertionAuthenticatorDataStruct{}, errors.New("invalid sign count")
+		return AuthenticatorStruct{}, errors.New("invalid sign count")
 	}
 
 	signCount := binary.BigEndian.Uint32(authenticatorDataBytes[33:])
 
-	if attestedCredentialDataDefined {
-		return AssertionAuthenticatorDataStruct{}, errors.New("attestation credential data defined")
+	var attestedCredentialData AttestedCredentialStruct
+	attestedCredentialDataSize := 0
+	if attestedCredentialDataIncluded {
+		if len(authenticatorDataBytes) < 53 {
+			return AuthenticatorStruct{}, errors.New("invalid aaguid")
+		}
+		aaguid := authenticatorDataBytes[37:53]
+		if len(authenticatorDataBytes) < 55 {
+			return AuthenticatorStruct{}, errors.New("invalid credential id length")
+		}
+		credentialIdLength := int(binary.BigEndian.Uint16(authenticatorDataBytes[53:]))
+		if len(authenticatorDataBytes) < 55+credentialIdLength {
+			return AuthenticatorStruct{}, errors.New("invalid credential id")
+		}
+		if credentialIdLength > 1023 {
+			return AuthenticatorStruct{}, errors.New("invalid credential id size")
+		}
+		credentialId := authenticatorDataBytes[55 : 55+credentialIdLength]
+
+		cosePublicKey, cborCosePublicKeySize, err := parseCBORCOSEPublicKey(authenticatorDataBytes[55+credentialIdLength:])
+		if err != nil {
+			errInvalidOrUnknownPublicKey := &InvalidOrUnknownCOSEPublicKeyErrorStruct{err}
+			return AuthenticatorStruct{}, errInvalidOrUnknownPublicKey
+		}
+
+		attestedCredentialData = AttestedCredentialStruct{
+			AAGUID:        aaguid,
+			CredentialId:  credentialId,
+			COSEPublicKey: cosePublicKey,
+		}
+		attestedCredentialDataSize = 18 + credentialIdLength + cborCosePublicKeySize
 	}
 
-	authenticatorData := AssertionAuthenticatorDataStruct{
-		RelyingPartyIdHash: relyingPartyId,
-		UserPresent:        userPresent,
-		UserVerified:       userVerified,
-		BackupEligible:     backupEligible,
-		BackedUp:           backedUp,
-		SignCount:          signCount,
+	if len(authenticatorDataBytes) != 37+attestedCredentialDataSize {
+		return AuthenticatorStruct{}, errors.New("left over bytes")
 	}
 
-	return authenticatorData, nil
+	authenticator := AuthenticatorStruct{
+		RelyingPartyIdHash:        relyingPartyId,
+		UserPresent:               userPresent,
+		UserVerified:              userVerified,
+		BackupEligible:            backupEligible,
+		BackedUp:                  backedUp,
+		SignCount:                 signCount,
+		AttestedCredentialDefined: attestedCredentialDataIncluded,
+		AttestedCredential:        attestedCredentialData,
+	}
+
+	return authenticator, nil
 }
 
-type AssertionAuthenticatorDataStruct struct {
-	RelyingPartyIdHash []byte
-	UserPresent        bool
-	UserVerified       bool
-	BackupEligible     bool
-	BackedUp           bool
-	SignCount          uint32
+type AuthenticatorStruct struct {
+	RelyingPartyIdHash        []byte
+	UserPresent               bool
+	UserVerified              bool
+	BackupEligible            bool
+	BackedUp                  bool
+	SignCount                 uint32
+	AttestedCredentialDefined bool
+	AttestedCredential        AttestedCredentialStruct
 }
 
-func (assertionAuthenticatorData *AssertionAuthenticatorDataStruct) CompareRelyingPartyIdAgainstHash(relyingPartyId string) bool {
+func (authenticatorData *AuthenticatorStruct) CompareRelyingPartyIdAgainstHash(relyingPartyId string) bool {
 	hashed := sha256.Sum256([]byte(relyingPartyId))
-	hashEqual := subtle.ConstantTimeCompare(hashed[:], assertionAuthenticatorData.RelyingPartyIdHash) == 1
+	hashEqual := subtle.ConstantTimeCompare(hashed[:], authenticatorData.RelyingPartyIdHash) == 1
 	return hashEqual
+}
+
+type AttestedCredentialStruct struct {
+	AAGUID        []byte
+	CredentialId  []byte
+	COSEPublicKey any
+}
+
+const AAGUIDSize = 16
+
+type InvalidOrUnknownCOSEPublicKeyErrorStruct struct {
+	COSEPublicKeyParsingError error
+}
+
+func (errInvalidOrUnknownCOSEPublicKeyError *InvalidOrUnknownCOSEPublicKeyErrorStruct) Error() string {
+	return fmt.Sprintf("invalid or unknown cose public key: %s", errInvalidOrUnknownCOSEPublicKeyError.COSEPublicKeyParsingError.Error())
 }
 
 func GenerateChallenge() []byte {
@@ -80,62 +138,60 @@ func CreateAssertionSignatureMessage(authenticatorData []byte, clientDataJSON []
 }
 
 const (
-	ClientDataTypeWebauthnGet    = "webauthn.get"
-	ClientDataTypeWebauthnCreate = "webauthn.create"
+	ClientTypeWebauthnGet    = "webauthn.get"
+	ClientTypeWebauthnCreate = "webauthn.create"
 )
 
-func ParseClientDataJSON(clientDataJSON []byte) (ClientDataStruct, error) {
+func ParseClientDataJSON(clientDataJSON []byte) (ClientStruct, error) {
 	clientDataJSONObject, err := json.ParseObject(string(clientDataJSON))
 	if err != nil {
-		return ClientDataStruct{}, fmt.Errorf("failed to parse json object: %s", err.Error())
+		return ClientStruct{}, fmt.Errorf("failed to parse json object: %s", err.Error())
 	}
 
-	clientDataType, err := clientDataJSONObject.GetString("type")
+	clientType, err := clientDataJSONObject.GetString("type")
 	if err != nil {
-		return ClientDataStruct{}, fmt.Errorf("failed to get 'type' string value: %s", err.Error())
+		return ClientStruct{}, fmt.Errorf("failed to get 'type' string value: %s", err.Error())
 	}
-	if clientDataType != ClientDataTypeWebauthnGet && clientDataType != ClientDataTypeWebauthnCreate {
-		return ClientDataStruct{}, fmt.Errorf("invalid client data type")
+	if clientType != ClientTypeWebauthnGet && clientType != ClientTypeWebauthnCreate {
+		return ClientStruct{}, fmt.Errorf("invalid client type")
 	}
 
 	encodedChallenge, err := clientDataJSONObject.GetString("challenge")
 	if err != nil {
-		return ClientDataStruct{}, fmt.Errorf("failed to get 'challenge' string value: %s", err.Error())
+		return ClientStruct{}, fmt.Errorf("failed to get 'challenge' string value: %s", err.Error())
 	}
 	challenge, err := base64.URLEncoding.WithPadding(base64.NoPadding).DecodeString(encodedChallenge)
 	if err != nil {
-		return ClientDataStruct{}, fmt.Errorf("failed to decode base64url challenge: %s", err.Error())
+		return ClientStruct{}, fmt.Errorf("failed to decode base64url challenge: %s", err.Error())
 	}
 
 	origin, err := clientDataJSONObject.GetString("origin")
 	if err != nil {
-		return ClientDataStruct{}, fmt.Errorf("failed to get 'origin' string value: %s", err.Error())
+		return ClientStruct{}, fmt.Errorf("failed to get 'origin' string value: %s", err.Error())
 	}
 
 	crossOrigin := false
 	if clientDataJSONObject.Has("cross_origin") {
 		crossOriginValue, err := clientDataJSONObject.GetBool("cross_origin")
 		if err != nil {
-			return ClientDataStruct{}, fmt.Errorf("failed to get 'cross_origin' bool value: %s", err.Error())
+			return ClientStruct{}, fmt.Errorf("failed to get 'cross_origin' bool value: %s", err.Error())
 		}
 		crossOrigin = crossOriginValue
 	}
 
-	clientData := ClientDataStruct{
-		Type:        clientDataType,
+	client := ClientStruct{
+		Type:        clientType,
 		Challenge:   challenge,
 		Origin:      origin,
 		CrossOrigin: crossOrigin,
 	}
 
-	return clientData, nil
+	return client, nil
 }
 
-type ClientDataStruct struct {
+type ClientStruct struct {
 	Type        string
 	Challenge   []byte
 	Origin      string
 	CrossOrigin bool
 }
-
-const AuthenticatorIdSize = 16

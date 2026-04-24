@@ -190,37 +190,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(400)
 			return
 		}
-		encodedPasskeyWebauthnCredentialId, err := values.GetString("passkey_webauthn_credential_id")
+		encodedWebauthnAuthenticatorData, err := values.GetString("webauthn_authenticator_data")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		passkeyWebauthnCredentialId, err := base64.StdEncoding.DecodeString(encodedPasskeyWebauthnCredentialId)
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		passkeySignatureAlgorithm, err := values.GetString("passkey_signature_algorithm")
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		encodedPasskeyPublicKey, err := values.GetString("passkey_public_key")
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		passkeyPublicKey, err := base64.StdEncoding.DecodeString(encodedPasskeyPublicKey)
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		encodedPasskeyWebauthnAuthenticatorId, err := values.GetString("passkey_webauthn_authenticator_id")
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		passkeyWebauthnAuthenticatorId, err := base64.StdEncoding.DecodeString(encodedPasskeyWebauthnAuthenticatorId)
+		webauthnAuthenticatorData, err := base64.StdEncoding.DecodeString(encodedWebauthnAuthenticatorData)
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -230,10 +205,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			requestId,
 			clientIPAddress,
 			signupToken,
-			passkeyWebauthnCredentialId,
-			passkeySignatureAlgorithm,
-			passkeyPublicKey,
-			passkeyWebauthnAuthenticatorId,
+			webauthnAuthenticatorData,
 		)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionSetSignupPasskeyWebauthnCredential, errorCode)
@@ -839,37 +811,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(400)
 			return
 		}
-		signatureAlgorithm, err := values.GetString("signature_algorithm")
+		encodedWebauthnAuthenticatorData, err := values.GetString("webauthn_authenticator_data")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		encodedPublicKey, err := values.GetString("public_key")
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		publicKey, err := base64.StdEncoding.DecodeString(encodedPublicKey)
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		encodedWebauthnCredentialId, err := values.GetString("webauthn_credential_id")
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		webauthnCredentialId, err := base64.StdEncoding.DecodeString(encodedWebauthnCredentialId)
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		encodedWebauthnAuthenticatorId, err := values.GetString("webauthn_authenticator_id")
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		webauthnAuthenticatorId, err := base64.StdEncoding.DecodeString(encodedWebauthnAuthenticatorId)
+		webauthnAuthenticatorData, err := base64.StdEncoding.DecodeString(encodedWebauthnAuthenticatorData)
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -879,10 +826,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			clientIPAddress,
 			sessionToken,
 			passkeyRegistrationToken,
-			webauthnCredentialId,
-			signatureAlgorithm,
-			publicKey,
-			webauthnAuthenticatorId,
+			webauthnAuthenticatorData,
 		)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionSetPasskeyRegistrationPasskeyWebauthnCredential, errorCode)

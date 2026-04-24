@@ -1,13 +1,6 @@
 package main
 
 import (
-	"crypto"
-	"crypto/ecdsa"
-	"crypto/ed25519"
-	"crypto/elliptic"
-	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/x509"
 	"errors"
 	"fmt"
 
@@ -283,20 +276,15 @@ func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
 	requestId string,
 	clientIPAddress string,
 	signupToken string,
-	passkeyWebauthnCredentialId []byte,
-	passkeySignatureAlgorithm string,
-	passkeyPublicKey []byte,
-	passkeyWebauthnAuthenticatorId []byte,
+	webauthnAuthenticatorData []byte,
 ) string {
 	const (
 		errorCodeInvalidSignupToken                  = "invalid_signup_token"
 		errorCodeEmailAddressNotVerified             = "email_address_not_verified"
 		errorCodePasskeyWebauthnCredentialAlreadySet = "passkey_webauthn_credential_already_set"
-		errorCodeInvalidSignatureAlgorithm           = "invalid_signature_algorithm"
-		errorCodeInvalidPublicKey                    = "invalid_public_key"
-		errorCodeInvalidWebauthnCredentialId         = "invalid_webauthn_credential_id"
+		errorCodeInvalidWebauthnAuthenticatorData    = "invalid_webauthn_authenticator_data"
+		errorCodeInvalidOrUnsupportedPublicKey       = "invalid_or_unsupported_public_key"
 		errorCodeWebauthnCredentialIdAlreadyUsed     = "webauthn_credential_id_already_used"
-		errorCodeInvalidWebauthnAuthenticatorId      = "invalid_webauthn_authenticator_id"
 		errorCodeConflict                            = "conflict"
 		errorCodeUnexpectedError                     = "unexpected_error"
 	)
@@ -334,16 +322,23 @@ func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
 		return errorCodeUnexpectedError
 	}
 
-	webauthnCredentialIdValid := verifyPasskeyWebauthnCredentialIdLength(passkeyWebauthnCredentialId)
-	if !webauthnCredentialIdValid {
-		return errorCodeInvalidWebauthnCredentialId
+	webauthnAuthenticator, err := webauthn.ParseAuthenticatorData(webauthnAuthenticatorData)
+	if _, ok := err.(*webauthn.InvalidOrUnknownCOSEPublicKeyErrorStruct); ok {
+		return errorCodeInvalidOrUnsupportedPublicKey
+	}
+	if err != nil {
+		return errorCodeInvalidWebauthnAuthenticatorData
 	}
 
-	if len(passkeyWebauthnAuthenticatorId) != webauthn.AuthenticatorIdSize {
-		return errorCodeInvalidWebauthnAuthenticatorId
+	passkeyRegistrationWebauthnAuthenticator, err := server.validatePasskeyRegistrationWebauthnAuthenticator(webauthnAuthenticator)
+	if errors.Is(err, errInvalidOrUnsupportedWebauthnPublicKey) {
+		return errorCodeInvalidOrUnsupportedPublicKey
+	}
+	if err != nil {
+		return errorCodeInvalidWebauthnAuthenticatorData
 	}
 
-	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(passkeyWebauthnCredentialId)
+	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(passkeyRegistrationWebauthnAuthenticator.credentialId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
 		server.logActionInternalError(requestId, clientIPAddress, actionSetSignupPasskeyWebauthnCredential, errorMessage)
@@ -353,34 +348,13 @@ func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
 		return errorCodeWebauthnCredentialIdAlreadyUsed
 	}
 
-	switch passkeySignatureAlgorithm {
-	case passkeySignatureAlgorithmEd25519:
-		if len(passkeyPublicKey) != ed25519.PublicKeySize {
-			return errorCodeInvalidPublicKey
-		}
-	case passkeySignatureAlgorithmECDSAP256SHA256:
-		ecdsaPublicKey, err := parseECDSASEC1PublicKey(elliptic.P256(), passkeyPublicKey)
-		if err != nil {
-			return errorCodeInvalidPublicKey
-		}
-		passkeyPublicKey = elliptic.MarshalCompressed(elliptic.P256(), ecdsaPublicKey.X, ecdsaPublicKey.Y)
-	case passkeySignatureAlgorithmRSASSAPKCS1V15SHA256:
-		rsaPublicKey, err := x509.ParsePKCS1PublicKey(passkeyPublicKey)
-		if err != nil {
-			return errorCodeInvalidPublicKey
-		}
-		// TODO: Accept 3072 bits?
-		if rsaPublicKey.Size() != 256 {
-			return errorCodeInvalidPublicKey
-		}
-		if rsaPublicKey.E != 65537 {
-			return errorCodeInvalidPublicKey
-		}
-	default:
-		return errorCodeInvalidSignatureAlgorithm
-	}
-
-	err = server.setSignupPasskeyWebauthnCredential(signup.id, passkeyWebauthnCredentialId, passkeySignatureAlgorithm, passkeyPublicKey, passkeyWebauthnAuthenticatorId)
+	err = server.setSignupPasskeyWebauthnCredential(
+		signup.id,
+		passkeyRegistrationWebauthnAuthenticator.credentialId,
+		passkeyRegistrationWebauthnAuthenticator.passkeySignatureAlgorithm,
+		passkeyRegistrationWebauthnAuthenticator.passkeyPublicKey,
+		passkeyRegistrationWebauthnAuthenticator.authenticatorId,
+	)
 	if errors.Is(err, errItemNotFound) {
 		return errorCodeConflict
 	}
@@ -567,72 +541,37 @@ func (server *serverStruct) verifyPasskeySigninWebauthnSignatureAction(
 		return "", errorCodeUnexpectedError
 	}
 
-	parsedAuthenticatorData, err := webauthn.ParseAssertionAuthenticatorData(webauthnAuthenticatorData)
+	webauthnAuthenticator, err := webauthn.ParseAuthenticatorData(webauthnAuthenticatorData)
 	if err != nil {
 		return "", errorCodeInvalidWebauthnAuthenticatorData
 	}
-	if !parsedAuthenticatorData.UserPresent || !parsedAuthenticatorData.UserVerified {
-		return "", errorCodeInvalidWebauthnAuthenticatorData
-	}
-	relyingPartyIdMatched := parsedAuthenticatorData.CompareRelyingPartyIdAgainstHash(server.webauthnRelyingPartyId)
-	if !relyingPartyIdMatched {
+	err = server.validatePasskeyVerificationWebauthnAuthenticator(webauthnAuthenticator)
+	if err != nil {
 		return "", errorCodeInvalidWebauthnAuthenticatorData
 	}
 
-	clientData, err := webauthn.ParseClientDataJSON(webauthnClientDataJSON)
+	webauthnClient, err := webauthn.ParseClientDataJSON(webauthnClientDataJSON)
 	if err != nil {
 		return "", errorCodeInvalidWebauthnClientDataJSON
 	}
-	if clientData.Type != webauthn.ClientDataTypeWebauthnGet {
-		return "", errorCodeInvalidWebauthnClientDataJSON
-	}
-	if clientData.Origin != server.origin {
-		return "", errorCodeInvalidWebauthnClientDataJSON
-	}
-	challengeEqual := passkeySignin.compareChallenge(clientData.Challenge)
-	if !challengeEqual {
-		return "", errorCodeInvalidWebauthnClientDataJSON
-	}
-	if clientData.CrossOrigin {
-		return "", errorCodeInvalidWebauthnClientDataJSON
+	err = server.validatePasskeyVerificationWebauthnClient(webauthnClient, passkeySignin.challenge)
+	if err != nil {
+		return "", errorCodeInvalidWebauthnAuthenticatorData
 	}
 
-	signatureMessage := webauthn.CreateAssertionSignatureMessage(webauthnAuthenticatorData, webauthnClientDataJSON)
-
-	signatureValid := false
-	switch passkey.signatureAlgorithm {
-	case passkeySignatureAlgorithmEd25519:
-		signatureValid = ed25519.Verify(ed25519.PublicKey(passkey.publicKey), signatureMessage, webauthnSignature)
-	case passkeySignatureAlgorithmECDSAP256SHA256:
-		ecdsaPublicKey, err := parseECDSASEC1CompressedPublicKey(elliptic.P256(), passkey.publicKey)
-		if err != nil {
-			errorMessage := fmt.Sprintf("failed to parse ecdsa compressed sec1 public key: %s", err.Error())
-			server.logActionInternalError(requestId, clientIPAddress, actionVerifyPasskeySigninWebauthnSignature, errorMessage)
-			return "", errorCodeUnexpectedError
-		}
-
-		messageHash := sha256.Sum256(signatureMessage)
-		signatureValid = ecdsa.VerifyASN1(ecdsaPublicKey, messageHash[:], webauthnSignature)
-	case passkeySignatureAlgorithmRSASSAPKCS1V15SHA256:
-		rsaPublicKey, err := x509.ParsePKCS1PublicKey(passkey.publicKey)
-		if err != nil {
-			errorMessage := fmt.Sprintf("failed to rsa pkcs1 public key: %s", err.Error())
-			server.logActionInternalError(requestId, clientIPAddress, actionVerifyPasskeySigninWebauthnSignature, errorMessage)
-			return "", errorCodeUnexpectedError
-		}
-
-		messageHash := sha256.Sum256(signatureMessage)
-		err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, messageHash[:], webauthnSignature)
-		signatureValid = err == nil
-	default:
-		errorMessage := fmt.Sprintf("unknown public key algorithm '%s'", passkey.signatureAlgorithm)
+	signatureValid, err := server.verifyPasskeyVerificationWebauthnSignature(
+		webauthnAuthenticatorData,
+		webauthnClientDataJSON,
+		webauthnSignature,
+		passkey,
+	)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to verify passkey verification webauthn signature: %s", err.Error())
 		server.logActionInternalError(requestId, clientIPAddress, actionVerifyPasskeySigninWebauthnSignature, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
-
 	if !signatureValid {
 		server.logPasskeySigninSignatureVerificationFailedRequestEvent(requestId, clientIPAddress, passkeySignin.id, passkey.id, passkey.userId)
-
 		return "", errorCodeInvalidWebauthnSignature
 	}
 
@@ -870,7 +809,7 @@ func (server *serverStruct) signOutAllDevicesAction(requestId string, clientIPAd
 func (server *serverStruct) cancelIdentityVerificationAction(requestId string, clientIPAddress string, sessionToken string, identityVerificationToken string) (string, string) {
 	const (
 		errorCodeInvalidSessionToken              = "invalid_session_token"
-		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification"
+		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification_token"
 		errorCodeSessionMismatch                  = "session_mismatch"
 		errorCodeConflict                         = "conflict"
 		errorCodeUnexpectedError                  = "unexpected_error"
@@ -962,7 +901,7 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 ) (string, string) {
 	const (
 		errorCodeInvalidSessionToken                  = "invalid_session_token"
-		errorCodeInvalidIdentityVerificationToken     = "invalid_identity_verification"
+		errorCodeInvalidIdentityVerificationToken     = "invalid_identity_verification_token"
 		errorCodeSessionMismatch                      = "session_mismatch"
 		errorCodeIdentityVerificationAlreadyCompleted = "identity_verification_already_completed"
 		errorCodePasskeyNotFound                      = "passkey_not_found"
@@ -1012,69 +951,35 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 		return "", errorCodeUserMismatch
 	}
 
-	parsedAuthenticatorData, err := webauthn.ParseAssertionAuthenticatorData(webauthnAuthenticatorData)
+	webauthnAuthenticator, err := webauthn.ParseAuthenticatorData(webauthnAuthenticatorData)
 	if err != nil {
 		return "", errorCodeInvalidWebauthnAuthenticatorData
 	}
-	if !parsedAuthenticatorData.UserPresent || !parsedAuthenticatorData.UserVerified {
-		return "", errorCodeInvalidWebauthnAuthenticatorData
-	}
-	relyingPartyIdMatched := parsedAuthenticatorData.CompareRelyingPartyIdAgainstHash(server.webauthnRelyingPartyId)
-	if !relyingPartyIdMatched {
+	err = server.validatePasskeyVerificationWebauthnAuthenticator(webauthnAuthenticator)
+	if err != nil {
 		return "", errorCodeInvalidWebauthnAuthenticatorData
 	}
 
-	clientData, err := webauthn.ParseClientDataJSON(webauthnClientDataJSON)
+	webauthnClient, err := webauthn.ParseClientDataJSON(webauthnClientDataJSON)
 	if err != nil {
 		return "", errorCodeInvalidWebauthnClientDataJSON
 	}
-	if clientData.Type != webauthn.ClientDataTypeWebauthnGet {
-		return "", errorCodeInvalidWebauthnClientDataJSON
-	}
-	if clientData.Origin != server.origin {
-		return "", errorCodeInvalidWebauthnClientDataJSON
-	}
-	challengeEqual := identityVerification.comparePasskeyVerificationChallenge(clientData.Challenge)
-	if !challengeEqual {
-		return "", errorCodeInvalidWebauthnClientDataJSON
-	}
-	if clientData.CrossOrigin {
-		return "", errorCodeInvalidWebauthnClientDataJSON
+	err = server.validatePasskeyVerificationWebauthnClient(webauthnClient, identityVerification.passkeyVerificationChallenge)
+	if err != nil {
+		return "", errorCodeInvalidWebauthnAuthenticatorData
 	}
 
-	signatureMessage := webauthn.CreateAssertionSignatureMessage(webauthnAuthenticatorData, webauthnClientDataJSON)
-
-	signatureValid := false
-	switch passkey.signatureAlgorithm {
-	case passkeySignatureAlgorithmEd25519:
-		signatureValid = ed25519.Verify(ed25519.PublicKey(passkey.publicKey), signatureMessage, webauthnSignature)
-	case passkeySignatureAlgorithmECDSAP256SHA256:
-		ecdsaPublicKey, err := parseECDSASEC1CompressedPublicKey(elliptic.P256(), passkey.publicKey)
-		if err != nil {
-			errorMessage := fmt.Sprintf("failed to parse ecdsa compressed sec1 public key: %s", err.Error())
-			server.logActionInternalError(requestId, clientIPAddress, actionVerifyIdentityVerificationPasskeyWebauthnSignature, errorMessage)
-			return "", errorCodeUnexpectedError
-		}
-
-		messageHash := sha256.Sum256(signatureMessage)
-		signatureValid = ecdsa.VerifyASN1(ecdsaPublicKey, messageHash[:], webauthnSignature)
-	case passkeySignatureAlgorithmRSASSAPKCS1V15SHA256:
-		rsaPublicKey, err := x509.ParsePKCS1PublicKey(passkey.publicKey)
-		if err != nil {
-			errorMessage := fmt.Sprintf("failed to rsa pkcs1 public key: %s", err.Error())
-			server.logActionInternalError(requestId, clientIPAddress, actionVerifyIdentityVerificationPasskeyWebauthnSignature, errorMessage)
-			return "", errorCodeUnexpectedError
-		}
-
-		messageHash := sha256.Sum256(signatureMessage)
-		err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, messageHash[:], webauthnSignature)
-		signatureValid = err == nil
-	default:
-		errorMessage := fmt.Sprintf("unknown public key algorithm '%s'", passkey.signatureAlgorithm)
+	signatureValid, err := server.verifyPasskeyVerificationWebauthnSignature(
+		webauthnAuthenticatorData,
+		webauthnClientDataJSON,
+		webauthnSignature,
+		passkey,
+	)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to verify passkey verification webauthn signature: %s", err.Error())
 		server.logActionInternalError(requestId, clientIPAddress, actionVerifyIdentityVerificationPasskeyWebauthnSignature, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
-
 	if !signatureValid {
 		server.logIdentityVerificationPasskeyWebauthnSignatureVerificationFailedRequestEvent(
 			requestId,
@@ -1086,7 +991,6 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 			identityVerification.verifyingActionId,
 			passkey.id,
 		)
-
 		return "", errorCodeInvalidWebauthnSignature
 	}
 
@@ -1108,7 +1012,7 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId string, clientIPAddress string, sessionToken string, identityVerificationToken string) string {
 	const (
 		errorCodeInvalidSessionToken              = "invalid_session_token"
-		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification"
+		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification_token"
 		errorCodeSessionMismatch                  = "session_mismatch"
 		errorCodeConflict                         = "conflict"
 		errorCodeUnexpectedError                  = "unexpected_error"
@@ -1184,7 +1088,7 @@ func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId s
 func (server *serverStruct) revokeIdentityVerificationEmailCodeAction(requestId string, clientIPAddress string, sessionToken string, identityVerificationToken string) string {
 	const (
 		errorCodeInvalidSessionToken              = "invalid_session_token"
-		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification"
+		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification_token"
 		errorCodeSessionMismatch                  = "session_mismatch"
 		errorCodeEmailCodeNotIssued               = "email_code_not_issued"
 		errorCodeConflict                         = "conflict"
@@ -1236,7 +1140,7 @@ func (server *serverStruct) revokeIdentityVerificationEmailCodeAction(requestId 
 func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId string, clientIPAddress string, sessionToken string, identityVerificationToken string, emailCode string) (string, string) {
 	const (
 		errorCodeInvalidSessionToken              = "invalid_session_token"
-		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification"
+		errorCodeInvalidIdentityVerificationToken = "invalid_identity_verification_token"
 		errorCodeSessionMismatch                  = "session_mismatch"
 		errorCodeEmailCodeNotIssued               = "email_code_not_issued"
 		errorCodeIncorrectEmailCode               = "incorrect_email_code"
@@ -1757,10 +1661,7 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialActio
 	clientIPAddress string,
 	sessionToken string,
 	passkeyRegistrationToken string,
-	webauthnCredentialId []byte,
-	signatureAlgorithm string,
-	publicKey []byte,
-	webauthnAuthenticatorId []byte,
+	webauthnAuthenticatorData []byte,
 ) string {
 	const (
 		errorCodeInvalidSessionToken                 = "invalid_session_token"
@@ -1768,11 +1669,9 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialActio
 		errorCodeSessionMismatch                     = "session_mismatch"
 		errorCodeIdentityNotVerified                 = "identity_not_verified"
 		errorCodePasskeyWebauthnCredentialAlreadySet = "webauthn_credential_already_set"
-		errorCodeInvalidSignatureAlgorithm           = "invalid_signature_algorithm"
-		errorCodeInvalidPublicKey                    = "invalid_public_key"
-		errorCodeInvalidWebauthnCredentialId         = "invalid_webauthn_credential_id"
+		errorCodeInvalidWebauthnAuthenticatorData    = "invalid_webauthn_authenticator_data"
+		errorCodeInvalidOrUnsupportedPublicKey       = "invalid_or_unsupported_public_key"
 		errorCodeWebauthnCredentialIdAlreadyUsed     = "webauthn_credential_id_already_used"
-		errorCodeInvalidWebauthnAuthenticatorId      = "invalid_webauthn_authenticator_id"
 		errorCodeConflict                            = "conflict"
 		errorCodeUnexpectedError                     = "unexpected_error"
 	)
@@ -1807,12 +1706,23 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialActio
 		return errorCodePasskeyWebauthnCredentialAlreadySet
 	}
 
-	webauthnCredentialIdValid := verifyPasskeyWebauthnCredentialIdLength(webauthnCredentialId)
-	if !webauthnCredentialIdValid {
-		return errorCodeInvalidWebauthnCredentialId
+	webauthnAuthenticator, err := webauthn.ParseAuthenticatorData(webauthnAuthenticatorData)
+	if _, ok := err.(*webauthn.InvalidOrUnknownCOSEPublicKeyErrorStruct); ok {
+		return errorCodeInvalidOrUnsupportedPublicKey
+	}
+	if err != nil {
+		return errorCodeInvalidWebauthnAuthenticatorData
 	}
 
-	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(webauthnCredentialId)
+	passkeyRegistrationWebauthnAuthenticator, err := server.validatePasskeyRegistrationWebauthnAuthenticator(webauthnAuthenticator)
+	if errors.Is(err, errInvalidOrUnsupportedWebauthnPublicKey) {
+		return errorCodeInvalidOrUnsupportedPublicKey
+	}
+	if err != nil {
+		return errorCodeInvalidWebauthnAuthenticatorData
+	}
+
+	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(passkeyRegistrationWebauthnAuthenticator.credentialId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
 		server.logActionInternalError(requestId, clientIPAddress, actionSetPasskeyRegistrationPasskeyWebauthnCredential, errorMessage)
@@ -1822,38 +1732,12 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialActio
 		return errorCodeWebauthnCredentialIdAlreadyUsed
 	}
 
-	if len(webauthnAuthenticatorId) != webauthn.AuthenticatorIdSize {
-		return errorCodeInvalidWebauthnAuthenticatorId
-	}
-
-	switch signatureAlgorithm {
-	case passkeySignatureAlgorithmEd25519:
-		if len(publicKey) != ed25519.PublicKeySize {
-			return errorCodeInvalidPublicKey
-		}
-	case passkeySignatureAlgorithmECDSAP256SHA256:
-		ecdsaPublicKey, err := parseECDSASEC1PublicKey(elliptic.P256(), publicKey)
-		if err != nil {
-			return errorCodeInvalidPublicKey
-		}
-		publicKey = elliptic.MarshalCompressed(elliptic.P256(), ecdsaPublicKey.X, ecdsaPublicKey.Y)
-	case passkeySignatureAlgorithmRSASSAPKCS1V15SHA256:
-		rsaPublicKey, err := x509.ParsePKCS1PublicKey(publicKey)
-		if err != nil {
-			return errorCodeInvalidPublicKey
-		}
-		// TODO: Accept 3072 bits?
-		if rsaPublicKey.Size() != 256 {
-			return errorCodeInvalidPublicKey
-		}
-		if rsaPublicKey.E != 65537 {
-			return errorCodeInvalidPublicKey
-		}
-	default:
-		return errorCodeInvalidSignatureAlgorithm
-	}
-
-	err = server.setPasskeyRegistrationPasskeyWebauthnCredential(passkeyRegistration.id, webauthnCredentialId, signatureAlgorithm, publicKey, webauthnAuthenticatorId)
+	err = server.setPasskeyRegistrationPasskeyWebauthnCredential(
+		passkeyRegistration.id,
+		passkeyRegistrationWebauthnAuthenticator.credentialId,
+		passkeyRegistrationWebauthnAuthenticator.passkeySignatureAlgorithm,
+		passkeyRegistrationWebauthnAuthenticator.passkeyPublicKey,
+		passkeyRegistrationWebauthnAuthenticator.authenticatorId)
 	if errors.Is(err, errItemNotFound) {
 		return errorCodeConflict
 	}
