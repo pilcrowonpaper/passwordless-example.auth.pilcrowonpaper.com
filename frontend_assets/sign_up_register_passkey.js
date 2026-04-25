@@ -15,6 +15,7 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 	createPasskeyButtonElement.disabled = true;
 
 	const publicKeyOptions = {
+		// Ignore challenge because we don't verify the attestation statement.
 		challenge: new Uint8Array(0),
 		rp: {
 			name: "Passwordless auth example",
