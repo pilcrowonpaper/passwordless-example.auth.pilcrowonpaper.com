@@ -151,9 +151,15 @@ func main() {
 		}
 	}()
 
+	httpSever := &http.Server{
+		Addr:           fmt.Sprintf(":%d", port),
+		Handler:        http.MaxBytesHandler(server, 1024*16),
+		MaxHeaderBytes: 1024 * 16,
+		ReadTimeout:    30 * time.Second,
+	}
+
 	fmt.Printf("Starting server on port %d...\n", port)
-	address := fmt.Sprintf(":%d", port)
-	err = http.ListenAndServe(address, server)
+	err = httpSever.ListenAndServe()
 	if err != nil {
 		log.Fatalf("failed to start server: %s", err.Error())
 	}
