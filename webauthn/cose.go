@@ -12,6 +12,10 @@ import (
 //
 // Assumes the COSE public key encoding strictly follows the Web Authentication API and CTAP 2.1.
 func parseCBORCOSEPublicKey(cosePublicKey []byte) (any, int, error) {
+	// We dont' have to fully parse the CBOR because:
+	// 1. The CTAP 2.1 canonical CBOR encoding ensures a strict map field order.
+	// 2. The WebAuthn specification states that only required fields for the algorithm are included.
+
 	if len(cosePublicKey) < 1 {
 		return nil, 0, fmt.Errorf("invalid major type")
 	}
