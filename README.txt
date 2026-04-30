@@ -20,7 +20,11 @@ The server is written in Go and uses SQLite as its main database. It's deployed 
 
 You can run the server locally with:
 
-> go run .
+>	go run .
+
+An AWS account is not required. By default, emails are printed to standard output.
+
+Use envrionemt variables to configure the server. See .env.example file for the full list (.env files are not automatically loaded).
 
 All routes and pages are defined in the routes.go file, and APIs are defined in the actions.go file as RPC-like function referred to as "actions."
 
