@@ -48,6 +48,7 @@ func createPageHTML(requestId string, title string, bodyHTML string, script stri
 	<main>%s</main>
 	<footer>
 		<p>Created by <a href="https://pilcrowonpaper.com">pilcrow</a></p>
+		<p>Source code: <a href="https://github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com">github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com</a></p>
 		<p>Questions and support: <a href="mailto:examples@auth.pilcrowonpaper.com">examples@auth.pilcrowonpaper.com</a></p>
 		<p>Request ID: %s</p>
 	</footer>
