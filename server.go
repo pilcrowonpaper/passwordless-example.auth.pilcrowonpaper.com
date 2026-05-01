@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	_ "embed"
+
 	"github.com/pilcrowonpaper/go-json"
 	"github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com/ratelimit"
 
@@ -18,6 +20,11 @@ import (
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
+
+const databaseFilename = "data.db"
+
+//go:embed schema.sql
+var schemaSQLScript string
 
 type serverStruct struct {
 	emailClient emailClientInterface

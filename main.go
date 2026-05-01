@@ -14,17 +14,10 @@ import (
 	"strings"
 	"time"
 
-	_ "embed"
-
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 )
-
-const databaseFilename = "data.db"
-
-//go:embed schema.sql
-var schemaSQLScript string
 
 func main() {
 	portString := os.Getenv("PORT")
