@@ -171,8 +171,7 @@ func (server *serverStruct) logBackgroundJobRun(runId string, backgroundJobName 
 
 	fmt.Println(logJSON)
 }
-
-func (server *serverStruct) logBackgroundJobError(runId string, errorMessage string) {
+func (server *serverStruct) logBackgroundJobError(runId string, backgroundJobName string, errorMessage string) {
 	if !server.logging.backgroundJob {
 		return
 	}
@@ -182,6 +181,7 @@ func (server *serverStruct) logBackgroundJobError(runId string, errorMessage str
 	logJSONBuilder := json.NewObjectBuilder(loggingJSONStringCharacterEscapingBehavior)
 	logJSONBuilder.AddString("type", "background_job_error")
 	logJSONBuilder.AddString("run_id", runId)
+	logJSONBuilder.AddString("background_job", backgroundJobName)
 	logJSONBuilder.AddInt64("timestamp", now.Unix())
 	logJSONBuilder.AddString("message", errorMessage)
 	logJSON := logJSONBuilder.Done()
@@ -189,7 +189,7 @@ func (server *serverStruct) logBackgroundJobError(runId string, errorMessage str
 	fmt.Println(logJSON)
 }
 
-func (server *serverStruct) logBackgroundJobRunCompletion(runId string) {
+func (server *serverStruct) logBackgroundJobRunCompletion(runId string, backgroundJobName string) {
 	if !server.logging.backgroundJob {
 		return
 	}
@@ -198,6 +198,7 @@ func (server *serverStruct) logBackgroundJobRunCompletion(runId string) {
 
 	logJSONBuilder := json.NewObjectBuilder(loggingJSONStringCharacterEscapingBehavior)
 	logJSONBuilder.AddString("type", "background_job_run_completion")
+	logJSONBuilder.AddString("background_job", backgroundJobName)
 	logJSONBuilder.AddString("run_id", runId)
 	logJSONBuilder.AddInt64("timestamp", now.Unix())
 	logJSON := logJSONBuilder.Done()

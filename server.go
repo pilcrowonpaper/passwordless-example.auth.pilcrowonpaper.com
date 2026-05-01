@@ -150,7 +150,25 @@ func createServer(emailClient emailClientInterface, origin string, webauthnRelyi
 	return server, nil
 }
 
-func (server *serverStruct) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (server *serverStruct) start(port int) error {
+	go server.clearDataBackgroundJob()
+
+	httpSever := &http.Server{
+		Addr:           fmt.Sprintf(":%d", port),
+		Handler:        http.MaxBytesHandler(http.HandlerFunc(server.handleRequest), 1024*16),
+		MaxHeaderBytes: 1024 * 16,
+		ReadTimeout:    30 * time.Second,
+	}
+
+	err := httpSever.ListenAndServe()
+	if err != nil {
+		return fmt.Errorf("failed to listen and serve: %s", err.Error())
+	}
+
+	return nil
+}
+
+func (server *serverStruct) handleRequest(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err := recover(); err != nil {
 			// Just kill the server if it panics
