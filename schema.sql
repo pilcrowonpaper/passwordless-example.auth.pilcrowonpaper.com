@@ -51,8 +51,7 @@ CREATE TABLE email_code_signin (
     user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
     secret_hash BLOB NOT NULL,
     email_address TEXT NOT NULL,
-    email_code_hash BLOB NOT NULL,
-    email_code_salt BLOB NOT NULL,
+    email_code TEXT NOT NULL,
     created_at INTEGER NOT NULL
 ) STRICT;
 
@@ -66,8 +65,7 @@ CREATE TABLE identity_verification (
     verifying_action_id TEXT NOT NULL,
     passkey_verification_challenge BLOB NOT NULL,
     email_address TEXT,
-    email_code_hash BLOB,
-    email_code_salt BLOB,
+    email_code TEXT,
     created_at INTEGER NOT NULL
 ) STRICT;
 
@@ -77,7 +75,7 @@ CREATE INDEX identity_verification_verifying_action_id_index ON identity_verific
 CREATE TABLE email_address_update (
     id TEXT NOT NULL PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES session(id) ON DELETE CASCADE,
-    secret_hash BLOB NOT NULL, 
+    secret_hash BLOB NOT NULL,
     identity_verified INTEGER NOT NULL DEFAULT 0,
     new_email_address TEXT,
     new_email_address_verification_code TEXT,
@@ -89,7 +87,7 @@ CREATE INDEX email_address_update_session_id_index ON email_address_update(sessi
 CREATE TABLE passkey_registration (
     id TEXT NOT NULL PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES session(id) ON DELETE CASCADE,
-    secret_hash BLOB NOT NULL, 
+    secret_hash BLOB NOT NULL,
     identity_verified INTEGER NOT NULL DEFAULT 0,
     passkey_webauthn_credential_id BLOB,
     passkey_signature_algorithm TEXT,
@@ -103,7 +101,7 @@ CREATE INDEX passkey_registration_session_id_index ON passkey_registration(sessi
 CREATE TABLE passkey_deletion (
     id TEXT NOT NULL PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES session(id) ON DELETE CASCADE,
-    secret_hash BLOB NOT NULL, 
+    secret_hash BLOB NOT NULL,
     passkey_id TEXT NOT NULL REFERENCES passkey(id) ON DELETE CASCADE,
     identity_verified INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
@@ -114,7 +112,7 @@ CREATE INDEX passkey_deletion_session_id_index ON passkey_deletion(session_id);
 CREATE TABLE account_deletion (
     id TEXT NOT NULL PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES session(id) ON DELETE CASCADE,
-    secret_hash BLOB NOT NULL, 
+    secret_hash BLOB NOT NULL,
     identity_verified INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
 ) STRICT;

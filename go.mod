@@ -8,7 +8,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.10
 	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.59.2
 	github.com/pilcrowonpaper/go-json v0.7.0
-	golang.org/x/crypto v0.48.0
 	golang.org/x/sync v0.19.0
 	zombiezen.com/go/sqlite v1.4.2
 )

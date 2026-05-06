@@ -18,7 +18,7 @@ type emailCodeSigninStruct struct {
 	userId        string
 	secretHash    []byte
 	emailAddress  string
-	emailCodeHash []byte
+	emailCode     string
 	emailCodeSalt []byte
 	createdAt     time.Time
 }
@@ -29,7 +29,11 @@ func (emailCodeSignin *emailCodeSigninStruct) compareSecretAgainstHash(secret []
 	return hashEqual
 }
 
-func (server *serverStruct) createEmailCodeSignin(userId string, emailAddress string) (emailCodeSigninStruct, []byte, string, error) {
+func (emailCodeSignin *emailCodeSigninStruct) compareEmailCode(emailCode string) bool {
+	return constantTimeCompareStrings(emailCode, emailCodeSignin.emailCode)
+}
+
+func (server *serverStruct) createEmailCodeSignin(userId string, emailAddress string) (emailCodeSigninStruct, []byte, error) {
 	nowSecondPrecision := getCurrentTimeSecondPrecision()
 
 	id := generateItemId()
@@ -38,47 +42,43 @@ func (server *serverStruct) createEmailCodeSignin(userId string, emailAddress st
 	secretHash := hashSessionSecret(secret)
 
 	emailCode := generateEmailCode()
-	emailCodeSalt := generateHashingSalt()
-	emailCodeHash := server.hashEmailCode(emailCode, emailCodeSalt)
 
 	emailCodeSignin := emailCodeSigninStruct{
-		id:            id,
-		userId:        userId,
-		secretHash:    secretHash,
-		emailAddress:  emailAddress,
-		emailCodeHash: emailCodeHash,
-		emailCodeSalt: emailCodeSalt,
-		createdAt:     nowSecondPrecision,
+		id:           id,
+		userId:       userId,
+		secretHash:   secretHash,
+		emailAddress: emailAddress,
+		emailCode:    emailCode,
+		createdAt:    nowSecondPrecision,
 	}
 
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
-		return emailCodeSigninStruct{}, nil, "", fmt.Errorf("failed to take database write connection: %s", err.Error())
+		return emailCodeSigninStruct{}, nil, fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
 	err = sqlitex.Execute(
 		databaseWriteConnection,
-		"INSERT INTO email_code_signin (id, user_id, secret_hash, email_address, email_code_hash, email_code_salt, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO email_code_signin (id, user_id, secret_hash, email_address, email_code, created_at) VALUES (?, ?, ?, ?, ?, ?)",
 		&sqlitex.ExecOptions{
 			Args: []any{
 				emailCodeSignin.id,
 				emailCodeSignin.userId,
 				emailCodeSignin.secretHash,
 				emailCodeSignin.emailAddress,
-				emailCodeSignin.emailCodeHash,
-				emailCodeSignin.emailCodeSalt,
+				emailCodeSignin.emailCode,
 				emailCodeSignin.createdAt.Unix(),
 			},
 		},
 	)
 	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 	if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
-		return emailCodeSigninStruct{}, nil, "", errItemConflict
+		return emailCodeSigninStruct{}, nil, errItemConflict
 	}
 	if err != nil {
-		return emailCodeSigninStruct{}, nil, "", fmt.Errorf("failed to insert into email_code_signin table: %s", err.Error())
+		return emailCodeSigninStruct{}, nil, fmt.Errorf("failed to insert into email_code_signin table: %s", err.Error())
 	}
 
-	return emailCodeSignin, secret, emailCode, nil
+	return emailCodeSignin, secret, nil
 }
 
 func (server *serverStruct) getEmailCodeSignin(emailCodeSigninId string) (emailCodeSigninStruct, error) {
@@ -90,7 +90,7 @@ func (server *serverStruct) getEmailCodeSignin(emailCodeSigninId string) (emailC
 	}
 	err = sqlitex.Execute(
 		databaseReadConnection,
-		"SELECT user_id, secret_hash, email_address, email_code_hash, email_code_salt, created_at FROM email_code_signin WHERE id = ?",
+		"SELECT user_id, secret_hash, email_address, email_code, created_at FROM email_code_signin WHERE id = ?",
 		&sqlitex.ExecOptions{
 			Args: []any{emailCodeSigninId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -101,22 +101,17 @@ func (server *serverStruct) getEmailCodeSignin(emailCodeSigninId string) (emailC
 
 				emailAddress := stmt.ColumnText(2)
 
-				emailCodeHash := make([]byte, stmt.ColumnLen(3))
-				stmt.ColumnBytes(3, emailCodeHash)
+				emailCode := stmt.ColumnText(3)
 
-				emailCodeSalt := make([]byte, stmt.ColumnLen(4))
-				stmt.ColumnBytes(4, emailCodeSalt)
-
-				createdAt := time.Unix(stmt.ColumnInt64(5), 0)
+				createdAt := time.Unix(stmt.ColumnInt64(4), 0)
 
 				emailCodeSignin := emailCodeSigninStruct{
-					id:            emailCodeSigninId,
-					userId:        userId,
-					secretHash:    secretHash,
-					emailAddress:  emailAddress,
-					emailCodeSalt: emailCodeSalt,
-					emailCodeHash: emailCodeHash,
-					createdAt:     createdAt,
+					id:           emailCodeSigninId,
+					userId:       userId,
+					secretHash:   secretHash,
+					emailAddress: emailAddress,
+					emailCode:    emailCode,
+					createdAt:    createdAt,
 				}
 
 				emailCodeSignins = append(emailCodeSignins, emailCodeSignin)

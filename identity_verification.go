@@ -23,11 +23,16 @@ type identityVerificationStruct struct {
 	passkeyVerificationChallenge []byte
 	emailAddressDefined          bool
 	emailAddress                 string
-	emailCodeHashDefined         bool
-	emailCodeHash                []byte
-	emailCodeSaltDefined         bool
-	emailCodeSalt                []byte
+	emailCodeDefined             bool
+	emailCode                    string
 	createdAt                    time.Time
+}
+
+func (identityVerification *identityVerificationStruct) compareEmailCode(emailCode string) bool {
+	if !identityVerification.emailAddressDefined {
+		return false
+	}
+	return constantTimeCompareStrings(emailCode, identityVerification.emailCode)
 }
 
 const (
@@ -56,7 +61,7 @@ func (server *serverStruct) getIdentityVerification(identityVerificationId strin
 	}
 	err = sqlitex.Execute(
 		databaseReadConnection,
-		"SELECT session_id, secret_hash, verifying_action, verifying_action_id, passkey_verification_challenge, email_address, email_code_hash, email_code_salt, created_at FROM identity_verification WHERE id = ?",
+		"SELECT session_id, secret_hash, verifying_action, verifying_action_id, passkey_verification_challenge, email_address, email_code, created_at FROM identity_verification WHERE id = ?",
 		&sqlitex.ExecOptions{
 			Args: []any{identityVerificationId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -79,23 +84,14 @@ func (server *serverStruct) getIdentityVerification(identityVerificationId strin
 					emailAddress = stmt.ColumnText(5)
 				}
 
-				emailCodeHashDefined := false
-				var emailCodeHash []byte
+				emailCodeDefined := false
+				var emailCode string
 				if !stmt.ColumnIsNull(6) {
-					emailCodeHashDefined = true
-					emailCodeHash = make([]byte, stmt.ColumnLen(6))
-					stmt.ColumnBytes(6, emailCodeHash)
+					emailCodeDefined = true
+					emailCode = stmt.ColumnText(6)
 				}
 
-				emailCodeSaltDefined := false
-				var emailCodeSalt []byte
-				if !stmt.ColumnIsNull(7) {
-					emailCodeSaltDefined = true
-					emailCodeSalt = make([]byte, stmt.ColumnLen(7))
-					stmt.ColumnBytes(7, emailCodeSalt)
-				}
-
-				createdAt := time.Unix(stmt.ColumnInt64(8), 0)
+				createdAt := time.Unix(stmt.ColumnInt64(7), 0)
 
 				identityVerification := identityVerificationStruct{
 					id:                           identityVerificationId,
@@ -106,10 +102,8 @@ func (server *serverStruct) getIdentityVerification(identityVerificationId strin
 					passkeyVerificationChallenge: passkeyVerificationChallenge,
 					emailAddressDefined:          emailAddressDefined,
 					emailAddress:                 emailAddress,
-					emailCodeHashDefined:         emailCodeHashDefined,
-					emailCodeHash:                emailCodeHash,
-					emailCodeSaltDefined:         emailCodeSaltDefined,
-					emailCodeSalt:                emailCodeSalt,
+					emailCodeDefined:             emailCodeDefined,
+					emailCode:                    emailCode,
 					createdAt:                    createdAt,
 				}
 
@@ -200,16 +194,14 @@ func (server *serverStruct) setBlankIdentityVerificationTokenCookie(w http.Respo
 
 func (server *serverStruct) issueIdentityVerificationEmailCode(identityVerificationId string, emailAddress string) (string, error) {
 	emailCode := generateEmailCode()
-	emailCodeSalt := generateHashingSalt()
-	emailCodeHash := server.hashEmailCode(emailCode, emailCodeSalt)
 
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
 		return "", fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
 
-	err = sqlitex.Execute(databaseWriteConnection, "UPDATE identity_verification SET email_address = ?, email_code_hash = ?, email_code_salt = ? WHERE id = ?", &sqlitex.ExecOptions{
-		Args: []any{emailAddress, emailCodeHash, emailCodeSalt, identityVerificationId},
+	err = sqlitex.Execute(databaseWriteConnection, "UPDATE identity_verification SET email_address = ?, email_code = ? WHERE id = ?", &sqlitex.ExecOptions{
+		Args: []any{emailAddress, emailCode, identityVerificationId},
 	})
 	if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
 		return "", errItemConflict

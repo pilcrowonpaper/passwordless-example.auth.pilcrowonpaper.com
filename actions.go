@@ -636,7 +636,7 @@ func (server *serverStruct) startEmailCodeSigninAction(requestId string, clientI
 		return "", errorCodeRateLimited
 	}
 
-	emailCodeSignin, emailCodeSigninSecret, emailCode, err := server.createEmailCodeSignin(user.id, user.emailAddress)
+	emailCodeSignin, emailCodeSigninSecret, err := server.createEmailCodeSignin(user.id, user.emailAddress)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create signin: %s", err.Error())
 		server.logActionInternalError(requestId, clientIPAddress, actionStartEmailCodeSignin, errorMessage)
@@ -645,7 +645,7 @@ func (server *serverStruct) startEmailCodeSigninAction(requestId string, clientI
 
 	server.logEmailCodeSigninStartedRequestEvent(requestId, clientIPAddress, emailCodeSignin.id, emailCodeSignin.userId, user.emailAddress)
 
-	err = server.sendSigninEmailCode(user.emailAddress, emailCode)
+	err = server.sendSigninEmailCode(user.emailAddress, emailCodeSignin.emailCode)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to send signin email code: %s", err.Error())
 		server.logActionInternalError(requestId, clientIPAddress, actionStartEmailCodeSignin, errorMessage)
@@ -713,8 +713,7 @@ func (server *serverStruct) verifyEmailCodeSigninEmailCodeAction(requestId strin
 		return "", errorCodeRateLimited
 	}
 
-	emailCodeHash := server.hashEmailCode(emailCode, emailCodeSignin.emailCodeSalt)
-	emailCodeCorrect := constantTimeCompare(emailCodeSignin.emailCodeHash, emailCodeHash)
+	emailCodeCorrect := emailCodeSignin.compareEmailCode(emailCode)
 	if !emailCodeCorrect {
 		server.logEmailCodeSigninEmailCodeVerificationFailedRequestEvent(requestId, clientIPAddress, emailCodeSignin.id, emailCodeSignin.userId, emailCodeSignin.emailAddress)
 		return "", errorCodeIncorrectEmailCode
@@ -1177,13 +1176,8 @@ func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId 
 		return "", errorCodeEmailCodeNotIssued
 	}
 
-	if !identityVerification.emailCodeHashDefined {
-		errorMessage := "identity verification email code hash not defined"
-		server.logActionInternalError(requestId, clientIPAddress, actionVerifyIdentityVerificationEmailCode, errorMessage)
-		return "", errorCodeUnexpectedError
-	}
-	if !identityVerification.emailCodeSaltDefined {
-		errorMessage := "identity verification email code salt not defined"
+	if !identityVerification.emailCodeDefined {
+		errorMessage := "identity verification email code not defined"
 		server.logActionInternalError(requestId, clientIPAddress, actionVerifyIdentityVerificationEmailCode, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
@@ -1193,8 +1187,7 @@ func (server *serverStruct) verifyIdentityVerificationEmailCodeAction(requestId 
 		return "", errorCodeRateLimited
 	}
 
-	emailCodeHash := server.hashEmailCode(emailCode, identityVerification.emailCodeSalt)
-	emailCodeCorrect := constantTimeCompare(identityVerification.emailCodeHash, emailCodeHash)
+	emailCodeCorrect := identityVerification.compareEmailCode(emailCode)
 	if !emailCodeCorrect {
 		server.logIdentityVerificationEmailCodeVerificationFailedRequestEvent(
 			requestId,
