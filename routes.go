@@ -1267,9 +1267,13 @@ func (server *serverStruct) signUpPageRoute(w http.ResponseWriter, r *http.Reque
 	}
 	pageTitle := "Create an account | Passwordless auth example"
 	bodyHTML := `<h1>Create an account</h1>
-<p>All accounts older than 24 hours are permanently deleted at midnight UTC each day. For security purposes, logs (which may include your IP address and email address) are retained for up to 90 days. These logs are processed and stored by <a href="https://cloudflare.com">Cloudflare</a> and <a href="https://railway.com">Railway</a>. We do not share or sell this data to any third parties.</p>
+<p>All accounts older than 24 hours are permanently deleted at midnight UTC each day.
+For security purposes, logs (which may include your IP address and email address) are retained for up to 90 days.
+These logs are processed and stored by <a href="https://cloudflare.com">Cloudflare</a> and <a href="https://railway.com">Railway</a>.
+We do not share or sell this data to any third parties.</p>
+<p>The email address must be lowercase and no more than 100 characters long.</p>
 <form id="sign-up-form">
-	<label for="sign-up-form-email-address-input">Email address (lowercase)</label>
+	<label for="sign-up-form-email-address-input">Email address</label>
 	<input id="sign-up-form-email-address-input" name="email_address" type="email" required />
 	<button id="sign-up-form-submit-button">Continue</button>
 </form>
@@ -1467,9 +1471,9 @@ func (server *serverStruct) signUpRegisterPasskeySetPasskeyNamePageRoute(w http.
 	pageTitle := "Name your passkey | Passwordless auth example"
 
 	bodyHTMLTemplate := `<h1>Name your passkey</h1>
-<p>Give your passkey a name so you can easily recognize and manage it later.</p>
+<p>Give your passkey a name so you can easily recognize and manage it later. The name must contain only standard characters (excluding double quotes) and must be 50 characters or fewer.</p>
 <form id="set-passkey-name-form">
-	<label for="set-passkey-name-form-name-input">Passkey name (Standard characters except double quotes)</label>
+	<label for="set-passkey-name-form-name-input">Passkey name</label>
 	<input id="set-passkey-name-form-name-input" name="passkey_name" required value="%s" />
 	<button id="set-passkey-name-form-submit-button">Complete</button>
 </form>`
@@ -2157,9 +2161,9 @@ func (server *serverStruct) registerPasskeySetPasskeyNamePageRoute(w http.Respon
 	pageTitle := "Name your passkey | Passwordless auth example"
 
 	bodyHTMLTemplate := `<h1>Name your passkey</h1>
-<p>Give your passkey a name so you can easily recognize and manage it later.</p>
+<p>Give your passkey a name so you can easily recognize and manage it later. The name must contain only standard characters (excluding double quotes) and must be 50 characters or fewer.</p>
 <form id="set-passkey-name-form">
-	<label for="set-passkey-name-form-name-input">Passkey name (Standard characters except double quotes)</label>
+	<label for="set-passkey-name-form-name-input">Passkey name</label>
 	<input id="set-passkey-name-form-name-input" name="passkey_name" required value="%s" />
 	<button id="set-passkey-name-form-submit-button">Complete</button>
 </form>`

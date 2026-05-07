@@ -70,6 +70,10 @@ form input {
 	margin-bottom: 1rem;
 }
 
+p + p {
+	margin-top: 1rem;
+}
+
 p > a {
 	color: var(--link-color);
 	text-decoration: underline;
