@@ -12,6 +12,15 @@ import (
 	"github.com/pilcrowonpaper/go-json"
 )
 
+type CredentialProtectionPolicy int
+
+const (
+	CredentialProtectionPolicyUndefined CredentialProtectionPolicy = iota
+	CredentialProtectionPolicyUserVerificationOptional
+	CredentialProtectionPolicyUserVerificationOptionalWithCredentialIDList
+	CredentialProtectionPolicyUserVerificationRequired
+)
+
 func ParseAuthenticatorData(authenticatorDataBytes []byte) (AuthenticatorStruct, error) {
 	if len(authenticatorDataBytes) < 32 {
 		return AuthenticatorStruct{}, errors.New("invalid relying party id")
@@ -28,10 +37,6 @@ func ParseAuthenticatorData(authenticatorDataBytes []byte) (AuthenticatorStruct,
 	backedUp := (authenticatorDataBytes[32]>>4)&0x1 == 1
 	attestedCredentialDataIncluded := (authenticatorDataBytes[32]>>6)&0x1 == 1
 	extensionDataIncluded := (authenticatorDataBytes[32]>>7)&0x1 == 1
-
-	if extensionDataIncluded {
-		return AuthenticatorStruct{}, errors.New("extension data included")
-	}
 
 	if len(authenticatorDataBytes) < 37 {
 		return AuthenticatorStruct{}, errors.New("invalid sign count")
@@ -58,7 +63,7 @@ func ParseAuthenticatorData(authenticatorDataBytes []byte) (AuthenticatorStruct,
 		}
 		credentialId := authenticatorDataBytes[55 : 55+credentialIdLength]
 
-		cosePublicKey, cborCosePublicKeySize, err := parseCBORCOSEPublicKey(authenticatorDataBytes[55+credentialIdLength:])
+		publicKeySize, err := verifyCOSEPublicKey(authenticatorDataBytes[55+credentialIdLength:])
 		if err != nil {
 			errInvalidOrUnknownPublicKey := &InvalidOrUnknownCOSEPublicKeyErrorStruct{err}
 			return AuthenticatorStruct{}, errInvalidOrUnknownPublicKey
@@ -67,38 +72,70 @@ func ParseAuthenticatorData(authenticatorDataBytes []byte) (AuthenticatorStruct,
 		attestedCredentialData = AttestedCredentialStruct{
 			AAGUID:        aaguid,
 			CredentialId:  credentialId,
-			COSEPublicKey: cosePublicKey,
+			COSEPublicKey: authenticatorDataBytes[55+credentialIdLength : 55+credentialIdLength+publicKeySize],
 		}
-		attestedCredentialDataSize = 18 + credentialIdLength + cborCosePublicKeySize
+		attestedCredentialDataSize = 18 + credentialIdLength + publicKeySize
 	}
 
-	if len(authenticatorDataBytes) != 37+attestedCredentialDataSize {
-		return AuthenticatorStruct{}, errors.New("left over bytes")
+	credentialProtectionPolicy := CredentialProtectionPolicyUndefined
+	if extensionDataIncluded {
+		extensions := authenticatorDataBytes[37+attestedCredentialDataSize:]
+		if len(extensions) < 1 {
+			return AuthenticatorStruct{}, errors.New("invalid extensions cbor map")
+		}
+		if extensions[0]>>5 != 5 {
+			return AuthenticatorStruct{}, fmt.Errorf("expected map major type")
+		}
+		if (extensions[0] & 0x1f) >= 24 {
+			return AuthenticatorStruct{}, fmt.Errorf("cbor map too large")
+		}
+		mapSize := int(extensions[0] & 0x1f)
+		if mapSize != 1 {
+			return AuthenticatorStruct{}, fmt.Errorf("invalid map size")
+		}
+		if len(extensions) < 13 || extensions[1] != 0x6b || string(extensions[2:13]) != "credProtect" {
+			return AuthenticatorStruct{}, fmt.Errorf("unknown or invalid field")
+		}
+		if len(extensions) == 14 && extensions[13] == 0x01 {
+			credentialProtectionPolicy = CredentialProtectionPolicyUserVerificationOptional
+		} else if len(extensions) == 14 && extensions[13] == 0x02 {
+			credentialProtectionPolicy = CredentialProtectionPolicyUserVerificationOptionalWithCredentialIDList
+		} else if len(extensions) == 14 && extensions[13] == 0x03 {
+			credentialProtectionPolicy = CredentialProtectionPolicyUserVerificationRequired
+		} else {
+			return AuthenticatorStruct{}, fmt.Errorf("invalid or unknown credProtect value")
+		}
+	} else {
+		if len(authenticatorDataBytes) != 37+attestedCredentialDataSize {
+			return AuthenticatorStruct{}, errors.New("left over bytes")
+		}
 	}
 
 	authenticator := AuthenticatorStruct{
-		RelyingPartyIdHash:        relyingPartyId,
-		UserPresent:               userPresent,
-		UserVerified:              userVerified,
-		BackupEligible:            backupEligible,
-		BackedUp:                  backedUp,
-		SignCount:                 signCount,
-		AttestedCredentialDefined: attestedCredentialDataIncluded,
-		AttestedCredential:        attestedCredentialData,
+		RelyingPartyIdHash:         relyingPartyId,
+		UserPresent:                userPresent,
+		UserVerified:               userVerified,
+		BackupEligible:             backupEligible,
+		BackedUp:                   backedUp,
+		SignCount:                  signCount,
+		AttestedCredentialDefined:  attestedCredentialDataIncluded,
+		AttestedCredential:         attestedCredentialData,
+		CredentialProtectionPolicy: credentialProtectionPolicy,
 	}
 
 	return authenticator, nil
 }
 
 type AuthenticatorStruct struct {
-	RelyingPartyIdHash        []byte
-	UserPresent               bool
-	UserVerified              bool
-	BackupEligible            bool
-	BackedUp                  bool
-	SignCount                 uint32
-	AttestedCredentialDefined bool
-	AttestedCredential        AttestedCredentialStruct
+	RelyingPartyIdHash         []byte
+	UserPresent                bool
+	UserVerified               bool
+	BackupEligible             bool
+	BackedUp                   bool
+	SignCount                  uint32
+	AttestedCredentialDefined  bool
+	AttestedCredential         AttestedCredentialStruct
+	CredentialProtectionPolicy CredentialProtectionPolicy
 }
 
 func (authenticatorData *AuthenticatorStruct) CompareRelyingPartyIdAgainstHash(relyingPartyId string) bool {
@@ -110,7 +147,7 @@ func (authenticatorData *AuthenticatorStruct) CompareRelyingPartyIdAgainstHash(r
 type AttestedCredentialStruct struct {
 	AAGUID        []byte
 	CredentialId  []byte
-	COSEPublicKey any
+	COSEPublicKey []byte
 }
 
 const AAGUIDSize = 16

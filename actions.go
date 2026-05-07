@@ -310,13 +310,8 @@ func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
 		return errorCodePasskeyWebauthnCredentialAlreadySet
 	}
 
-	if signup.passkeySignatureAlgorithmDefined {
-		errorMessage := "signup passkey signature algorithm defined"
-		server.logActionInternalError(requestId, clientIPAddress, actionSetSignupPasskeyWebauthnCredential, errorMessage)
-		return errorCodeUnexpectedError
-	}
-	if signup.passkeyPublicKeyDefined {
-		errorMessage := "signup passkey public key defined"
+	if signup.passkeyCOSEPublicKeyDefined {
+		errorMessage := "signup passkey cose public key defined"
 		server.logActionInternalError(requestId, clientIPAddress, actionSetSignupPasskeyWebauthnCredential, errorMessage)
 		return errorCodeUnexpectedError
 	}
@@ -334,15 +329,12 @@ func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
 		return errorCodeInvalidWebauthnAuthenticatorData
 	}
 
-	passkeyRegistrationWebauthnAuthenticator, err := server.validatePasskeyRegistrationWebauthnAuthenticator(webauthnAuthenticator)
-	if errors.Is(err, errInvalidOrUnsupportedWebauthnPublicKey) {
-		return errorCodeInvalidOrUnsupportedPublicKey
-	}
+	err = server.validatePasskeyRegistrationWebauthnAuthenticator(webauthnAuthenticator)
 	if err != nil {
 		return errorCodeInvalidWebauthnAuthenticatorData
 	}
 
-	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(passkeyRegistrationWebauthnAuthenticator.credentialId)
+	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(webauthnAuthenticator.AttestedCredential.CredentialId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
 		server.logActionInternalError(requestId, clientIPAddress, actionSetSignupPasskeyWebauthnCredential, errorMessage)
@@ -354,10 +346,9 @@ func (server *serverStruct) setSignupPasskeyWebauthnCredentialAction(
 
 	err = server.setSignupPasskeyWebauthnCredential(
 		signup.id,
-		passkeyRegistrationWebauthnAuthenticator.credentialId,
-		passkeyRegistrationWebauthnAuthenticator.passkeySignatureAlgorithm,
-		passkeyRegistrationWebauthnAuthenticator.passkeyPublicKey,
-		passkeyRegistrationWebauthnAuthenticator.authenticatorId,
+		webauthnAuthenticator.AttestedCredential.CredentialId,
+		webauthnAuthenticator.AttestedCredential.COSEPublicKey,
+		webauthnAuthenticator.AttestedCredential.AAGUID,
 	)
 	if errors.Is(err, errItemNotFound) {
 		return errorCodeConflict
@@ -400,13 +391,8 @@ func (server *serverStruct) setSignupPasskeyNameAction(requestId string, clientI
 		return "", errorCodePasskeyWebauthnCredentialNotSet
 	}
 
-	if !signup.passkeySignatureAlgorithmDefined {
-		errorMessage := "signup passkey signature algorithm not defined"
-		server.logActionInternalError(requestId, clientIPAddress, actionSetSignupPasskeyName, errorMessage)
-		return "", errorCodeUnexpectedError
-	}
-	if !signup.passkeyPublicKeyDefined {
-		errorMessage := "signup passkey public key not defined"
+	if !signup.passkeyCOSEPublicKeyDefined {
+		errorMessage := "signup passkey cose public key not defined"
 		server.logActionInternalError(requestId, clientIPAddress, actionSetSignupPasskeyName, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
@@ -563,14 +549,14 @@ func (server *serverStruct) verifyPasskeySigninWebauthnSignatureAction(
 		return "", errorCodeInvalidWebauthnAuthenticatorData
 	}
 
-	signatureValid, err := server.verifyPasskeyVerificationWebauthnSignature(
+	signatureValid, err := webauthn.VerifyAssertionSignatureWithCOSEPublicKey(
+		passkey.cosePublicKey,
+		webauthnSignature,
 		webauthnAuthenticatorData,
 		webauthnClientDataJSON,
-		webauthnSignature,
-		passkey,
 	)
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to verify passkey verification webauthn signature: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to verify assertion signature with cose public key: %s", err.Error())
 		server.logActionInternalError(requestId, clientIPAddress, actionVerifyPasskeySigninWebauthnSignature, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
@@ -1063,14 +1049,14 @@ func (server *serverStruct) verifyIdentityVerificationPasskeyWebauthnSignatureAc
 		return "", errorCodeInvalidWebauthnAuthenticatorData
 	}
 
-	signatureValid, err := server.verifyPasskeyVerificationWebauthnSignature(
+	signatureValid, err := webauthn.VerifyAssertionSignatureWithCOSEPublicKey(
+		passkey.cosePublicKey,
+		webauthnSignature,
 		webauthnAuthenticatorData,
 		webauthnClientDataJSON,
-		webauthnSignature,
-		passkey,
 	)
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to verify passkey verification webauthn signature: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to verify assertion signature with cose public key: %s", err.Error())
 		server.logActionInternalError(requestId, clientIPAddress, actionVerifyIdentityVerificationPasskeyWebauthnSignature, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
@@ -1879,15 +1865,12 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialActio
 		return errorCodeInvalidWebauthnAuthenticatorData
 	}
 
-	passkeyRegistrationWebauthnAuthenticator, err := server.validatePasskeyRegistrationWebauthnAuthenticator(webauthnAuthenticator)
-	if errors.Is(err, errInvalidOrUnsupportedWebauthnPublicKey) {
-		return errorCodeInvalidOrUnsupportedPublicKey
-	}
+	err = server.validatePasskeyRegistrationWebauthnAuthenticator(webauthnAuthenticator)
 	if err != nil {
 		return errorCodeInvalidWebauthnAuthenticatorData
 	}
 
-	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(passkeyRegistrationWebauthnAuthenticator.credentialId)
+	webauthnCredentialIdAvailable, err := server.checkPasskeyWebauthnCredentialIdAvailability(webauthnAuthenticator.AttestedCredential.CredentialId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to check passkey webauthn credential id availability: %s", err.Error())
 		server.logActionInternalError(requestId, clientIPAddress, actionSetPasskeyRegistrationPasskeyWebauthnCredential, errorMessage)
@@ -1899,10 +1882,10 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredentialActio
 
 	err = server.setPasskeyRegistrationPasskeyWebauthnCredential(
 		passkeyRegistration.id,
-		passkeyRegistrationWebauthnAuthenticator.credentialId,
-		passkeyRegistrationWebauthnAuthenticator.passkeySignatureAlgorithm,
-		passkeyRegistrationWebauthnAuthenticator.passkeyPublicKey,
-		passkeyRegistrationWebauthnAuthenticator.authenticatorId)
+		webauthnAuthenticator.AttestedCredential.CredentialId,
+		webauthnAuthenticator.AttestedCredential.COSEPublicKey,
+		webauthnAuthenticator.AttestedCredential.AAGUID,
+	)
 	if errors.Is(err, errItemNotFound) {
 		return errorCodeConflict
 	}
@@ -1965,13 +1948,13 @@ func (server *serverStruct) setPasskeyRegistrationPasskeyNameAction(requestId st
 		return errorCodeInvalidPasskeyName
 	}
 
-	if !passkeyRegistration.passkeySignatureAlgorithmDefined {
-		errorMessage := "signup passkey registration public key algorithm not defined"
+	if !passkeyRegistration.passkeyCOSEPublicKeyDefined {
+		errorMessage := "signup passkey registration passkey cose public key not defined"
 		server.logActionInternalError(requestId, clientIPAddress, actionSetPasskeyRegistrationPasskeyName, errorMessage)
 		return errorCodeUnexpectedError
 	}
-	if !passkeyRegistration.passkeyWebauthnCredentialIdDefined {
-		errorMessage := "signup passkey registration webauthn credential id not defined"
+	if !passkeyRegistration.passkeyWebauthnAuthenticatorIdDefined {
+		errorMessage := "signup passkey registration passkey webauthn authenticator id not defined"
 		server.logActionInternalError(requestId, clientIPAddress, actionSetPasskeyRegistrationPasskeyName, errorMessage)
 		return errorCodeUnexpectedError
 	}

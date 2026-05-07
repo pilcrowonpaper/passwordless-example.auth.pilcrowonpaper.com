@@ -28,18 +28,11 @@ func verifyPasskeyNamePattern(passkeyName string) bool {
 	return true
 }
 
-const (
-	passkeySignatureAlgorithmEd25519              = "ed25519"
-	passkeySignatureAlgorithmECDSAP256SHA256      = "ecdsa.p256.sha256"
-	passkeySignatureAlgorithmRSASSAPKCS1V15SHA256 = "rsassa_pkcs1_v1_5.sha256"
-)
-
 type passkeyStruct struct {
 	id                      string
 	userId                  string
 	webauthnCredentialId    []byte
-	signatureAlgorithm      string
-	publicKey               []byte
+	cosePublicKey           []byte
 	webauthnAuthenticatorId []byte
 	name                    string
 	createdAt               time.Time
@@ -54,7 +47,7 @@ func (server *serverStruct) getPasskey(passkeyId string) (passkeyStruct, error) 
 	}
 	err = sqlitex.Execute(
 		databaseReadConnection,
-		"SELECT user_id, webauthn_credential_id, signature_algorithm, public_key, webauthn_authenticator_id, name, created_at FROM passkey WHERE id = ?",
+		"SELECT user_id, webauthn_credential_id,  cose_public_key, webauthn_authenticator_id, name, created_at FROM passkey WHERE id = ?",
 		&sqlitex.ExecOptions{
 			Args: []any{passkeyId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -63,24 +56,21 @@ func (server *serverStruct) getPasskey(passkeyId string) (passkeyStruct, error) 
 				webauthnCredentialId := make([]byte, stmt.ColumnLen(1))
 				stmt.ColumnBytes(1, webauthnCredentialId)
 
-				signatureAlgorithm := stmt.ColumnText(2)
+				cosePublicKey := make([]byte, stmt.ColumnLen(2))
+				stmt.ColumnBytes(2, cosePublicKey)
 
-				publicKey := make([]byte, stmt.ColumnLen(3))
-				stmt.ColumnBytes(3, publicKey)
+				webauthnAuthenticatorId := make([]byte, stmt.ColumnLen(3))
+				stmt.ColumnBytes(3, webauthnAuthenticatorId)
 
-				webauthnAuthenticatorId := make([]byte, stmt.ColumnLen(4))
-				stmt.ColumnBytes(4, webauthnAuthenticatorId)
+				name := stmt.ColumnText(4)
 
-				name := stmt.ColumnText(5)
-
-				createdAt := time.Unix(stmt.ColumnInt64(6), 0)
+				createdAt := time.Unix(stmt.ColumnInt64(5), 0)
 
 				passkey := passkeyStruct{
 					id:                      passkeyId,
 					userId:                  userId,
 					webauthnCredentialId:    webauthnCredentialId,
-					signatureAlgorithm:      signatureAlgorithm,
-					publicKey:               publicKey,
+					cosePublicKey:           cosePublicKey,
 					webauthnAuthenticatorId: webauthnAuthenticatorId,
 					name:                    name,
 					createdAt:               createdAt,
@@ -112,7 +102,7 @@ func (server *serverStruct) getPasskeyByWebauthnCredentialId(webauthnCredentialI
 	}
 	err = sqlitex.Execute(
 		databaseReadConnection,
-		"SELECT id, user_id, signature_algorithm, public_key, webauthn_authenticator_id, name, created_at FROM passkey WHERE webauthn_credential_id = ?",
+		"SELECT id, user_id, cose_public_key, webauthn_authenticator_id, name, created_at FROM passkey WHERE webauthn_credential_id = ?",
 		&sqlitex.ExecOptions{
 			Args: []any{webauthnCredentialId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -120,24 +110,21 @@ func (server *serverStruct) getPasskeyByWebauthnCredentialId(webauthnCredentialI
 
 				userId := stmt.ColumnText(1)
 
-				signatureAlgorithm := stmt.ColumnText(2)
+				cosePublicKey := make([]byte, stmt.ColumnLen(2))
+				stmt.ColumnBytes(2, cosePublicKey)
 
-				publicKey := make([]byte, stmt.ColumnLen(3))
-				stmt.ColumnBytes(3, publicKey)
+				webauthnAuthenticatorId := make([]byte, stmt.ColumnLen(3))
+				stmt.ColumnBytes(3, webauthnAuthenticatorId)
 
-				webauthnAuthenticatorId := make([]byte, stmt.ColumnLen(4))
-				stmt.ColumnBytes(4, webauthnAuthenticatorId)
+				name := stmt.ColumnText(4)
 
-				name := stmt.ColumnText(5)
-
-				createdAt := time.Unix(stmt.ColumnInt64(6), 0)
+				createdAt := time.Unix(stmt.ColumnInt64(5), 0)
 
 				passkey := passkeyStruct{
 					id:                      id,
 					userId:                  userId,
 					webauthnCredentialId:    webauthnCredentialId,
-					signatureAlgorithm:      signatureAlgorithm,
-					publicKey:               publicKey,
+					cosePublicKey:           cosePublicKey,
 					webauthnAuthenticatorId: webauthnAuthenticatorId,
 					name:                    name,
 					createdAt:               createdAt,
@@ -169,7 +156,7 @@ func (server *serverStruct) getUserPasskeys(userId string) ([]passkeyStruct, err
 	}
 	err = sqlitex.Execute(
 		databaseReadConnection,
-		"SELECT id, webauthn_credential_id, signature_algorithm, public_key, webauthn_authenticator_id, name, created_at FROM passkey WHERE user_id = ?",
+		"SELECT id, webauthn_credential_id, cose_public_key, webauthn_authenticator_id, name, created_at FROM passkey WHERE user_id = ?",
 		&sqlitex.ExecOptions{
 			Args: []any{userId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -178,24 +165,21 @@ func (server *serverStruct) getUserPasskeys(userId string) ([]passkeyStruct, err
 				webauthnCredentialId := make([]byte, stmt.ColumnLen(1))
 				stmt.ColumnBytes(1, webauthnCredentialId)
 
-				signatureAlgorithm := stmt.ColumnText(2)
+				cosePublicKey := make([]byte, stmt.ColumnLen(2))
+				stmt.ColumnBytes(2, cosePublicKey)
 
-				publicKey := make([]byte, stmt.ColumnLen(3))
-				stmt.ColumnBytes(3, publicKey)
+				webauthnAuthenticatorId := make([]byte, stmt.ColumnLen(3))
+				stmt.ColumnBytes(3, webauthnAuthenticatorId)
 
-				webauthnAuthenticatorId := make([]byte, stmt.ColumnLen(4))
-				stmt.ColumnBytes(4, webauthnAuthenticatorId)
+				name := stmt.ColumnText(4)
 
-				name := stmt.ColumnText(5)
-
-				createdAt := time.Unix(stmt.ColumnInt64(6), 0)
+				createdAt := time.Unix(stmt.ColumnInt64(5), 0)
 
 				passkey := passkeyStruct{
 					id:                      id,
 					userId:                  userId,
 					webauthnCredentialId:    webauthnCredentialId,
-					signatureAlgorithm:      signatureAlgorithm,
-					publicKey:               publicKey,
+					cosePublicKey:           cosePublicKey,
 					webauthnAuthenticatorId: webauthnAuthenticatorId,
 					name:                    name,
 					createdAt:               createdAt,

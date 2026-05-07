@@ -30,6 +30,10 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 			userVerification: "required",
 		},
 		attestation: "none",
+		extensions: {
+			credentialProtectionPolicy: "userVerificationRequired",
+			enforceCredentialProtectionPolicy: false,
+		},
 	};
 
 	let credential;

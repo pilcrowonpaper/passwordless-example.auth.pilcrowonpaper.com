@@ -22,10 +22,8 @@ type signupStruct struct {
 	emailAddressVerified                  bool
 	passkeyWebauthnCredentialIdDefined    bool
 	passkeyWebauthnCredentialId           []byte
-	passkeySignatureAlgorithmDefined      bool
-	passkeySignatureAlgorithm             string
-	passkeyPublicKeyDefined               bool
-	passkeyPublicKey                      []byte
+	passkeyCOSEPublicKeyDefined           bool
+	passkeyCOSEPublicKey                  []byte
 	passkeyWebauthnAuthenticatorIdDefined bool
 	passkeyWebauthnAuthenticatorId        []byte
 	createdAt                             time.Time
@@ -103,7 +101,7 @@ func (server *serverStruct) getSignup(signupId string) (signupStruct, error) {
 	if err != nil {
 		return signupStruct{}, fmt.Errorf("failed to take database read connection: %s", err.Error())
 	}
-	err = sqlitex.Execute(databaseReadConnection, "SELECT secret_hash, target_user_id, email_address, email_address_verification_code, email_address_verified, passkey_webauthn_credential_id, passkey_signature_algorithm, passkey_public_key, passkey_webauthn_authenticator_id, created_at FROM signup WHERE id = ?", &sqlitex.ExecOptions{
+	err = sqlitex.Execute(databaseReadConnection, "SELECT secret_hash, target_user_id, email_address, email_address_verification_code, email_address_verified, passkey_webauthn_credential_id, passkey_cose_public_key, passkey_webauthn_authenticator_id, created_at FROM signup WHERE id = ?", &sqlitex.ExecOptions{
 		Args: []any{signupId},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			secretHash := make([]byte, stmt.ColumnLen(0))
@@ -125,30 +123,23 @@ func (server *serverStruct) getSignup(signupId string) (signupStruct, error) {
 				stmt.ColumnBytes(5, passkeyWebauthnCredentialId)
 			}
 
-			passkeySignatureAlgorithmDefined := false
-			var passkeySignatureAlgorithm string
+			passkeyCOSEPublicKeyDefined := false
+			var passkeyCOSEPublicKey []byte
 			if !stmt.ColumnIsNull(6) {
-				passkeySignatureAlgorithmDefined = true
-				passkeySignatureAlgorithm = stmt.ColumnText(6)
-			}
-
-			passkeyPublicKeyDefined := false
-			var passkeyPublicKey []byte
-			if !stmt.ColumnIsNull(7) {
-				passkeyPublicKeyDefined = true
-				passkeyPublicKey = make([]byte, stmt.ColumnLen(7))
-				stmt.ColumnBytes(7, passkeyPublicKey)
+				passkeyCOSEPublicKeyDefined = true
+				passkeyCOSEPublicKey = make([]byte, stmt.ColumnLen(6))
+				stmt.ColumnBytes(6, passkeyCOSEPublicKey)
 			}
 
 			passkeyWebauthnAuthenticatorIdDefined := false
 			var passkeyWebauthnAuthenticatorId []byte
-			if !stmt.ColumnIsNull(8) {
+			if !stmt.ColumnIsNull(7) {
 				passkeyWebauthnAuthenticatorIdDefined = true
-				passkeyWebauthnAuthenticatorId = make([]byte, stmt.ColumnLen(8))
-				stmt.ColumnBytes(8, passkeyWebauthnAuthenticatorId)
+				passkeyWebauthnAuthenticatorId = make([]byte, stmt.ColumnLen(7))
+				stmt.ColumnBytes(7, passkeyWebauthnAuthenticatorId)
 			}
 
-			createdAt := time.Unix(stmt.ColumnInt64(9), 0)
+			createdAt := time.Unix(stmt.ColumnInt64(8), 0)
 
 			signup := signupStruct{
 				id:                                    signupId,
@@ -159,10 +150,8 @@ func (server *serverStruct) getSignup(signupId string) (signupStruct, error) {
 				emailAddressVerified:                  emailAddressVerified,
 				passkeyWebauthnCredentialIdDefined:    passkeyWebauthnCredentialIdDefined,
 				passkeyWebauthnCredentialId:           passkeyWebauthnCredentialId,
-				passkeySignatureAlgorithmDefined:      passkeySignatureAlgorithmDefined,
-				passkeySignatureAlgorithm:             passkeySignatureAlgorithm,
-				passkeyPublicKeyDefined:               passkeyPublicKeyDefined,
-				passkeyPublicKey:                      passkeyPublicKey,
+				passkeyCOSEPublicKeyDefined:           passkeyCOSEPublicKeyDefined,
+				passkeyCOSEPublicKey:                  passkeyCOSEPublicKey,
 				passkeyWebauthnAuthenticatorIdDefined: passkeyWebauthnAuthenticatorIdDefined,
 				passkeyWebauthnAuthenticatorId:        passkeyWebauthnAuthenticatorId,
 				createdAt:                             createdAt,
@@ -256,13 +245,13 @@ func (server *serverStruct) setSignupAsEmailAddressVerified(signupId string) err
 	return nil
 }
 
-func (server *serverStruct) setSignupPasskeyWebauthnCredential(signupId string, passkeyWebauthnCredentialId []byte, passkeySignatureAlgorithm string, passkeyPublicKey []byte, passkeyWebauthnAuthenticatorId []byte) error {
+func (server *serverStruct) setSignupPasskeyWebauthnCredential(signupId string, passkeyWebauthnCredentialId []byte, passkeyCOSEPublicKey []byte, passkeyWebauthnAuthenticatorId []byte) error {
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
-	err = sqlitex.Execute(databaseWriteConnection, "UPDATE signup SET passkey_webauthn_credential_id = ?, passkey_signature_algorithm = ?, passkey_public_key = ?, passkey_webauthn_authenticator_id = ? WHERE id = ? AND passkey_webauthn_credential_id IS NULL", &sqlitex.ExecOptions{
-		Args: []any{passkeyWebauthnCredentialId, passkeySignatureAlgorithm, passkeyPublicKey, passkeyWebauthnAuthenticatorId, signupId},
+	err = sqlitex.Execute(databaseWriteConnection, "UPDATE signup SET passkey_webauthn_credential_id = ?, passkey_cose_public_key = ?, passkey_webauthn_authenticator_id = ? WHERE id = ? AND passkey_webauthn_credential_id IS NULL", &sqlitex.ExecOptions{
+		Args: []any{passkeyWebauthnCredentialId, passkeyCOSEPublicKey, passkeyWebauthnAuthenticatorId, signupId},
 	})
 	if err != nil {
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
@@ -455,32 +444,29 @@ RETURNING id, email_address`,
 	passkeys := []passkeyStruct{}
 	err = sqlitex.Execute(
 		databaseWriteConnection,
-		`INSERT INTO passkey (id, user_id, webauthn_credential_id, signature_algorithm, public_key, webauthn_authenticator_id, name, created_at)
-SELECT ?, ?, passkey_webauthn_credential_id, passkey_signature_algorithm, passkey_public_key, passkey_webauthn_authenticator_id, ?, ? FROM signup
+		`INSERT INTO passkey (id, user_id, webauthn_credential_id, cose_public_key, webauthn_authenticator_id, name, created_at)
+SELECT ?, ?, passkey_webauthn_credential_id, passkey_cose_public_key, passkey_webauthn_authenticator_id, ?, ? FROM signup
 WHERE id = ?
-RETURNING webauthn_credential_id, signature_algorithm, public_key, webauthn_authenticator_id, name`,
+RETURNING webauthn_credential_id, cose_public_key, webauthn_authenticator_id, name`,
 		&sqlitex.ExecOptions{
 			Args: []any{passkeyId, user.id, passkeyName, nowSecondPrecision.Unix(), signupId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				webauthnCredentialId := make([]byte, stmt.ColumnLen(0))
 				stmt.ColumnBytes(0, webauthnCredentialId)
 
-				signatureAlgorithm := stmt.ColumnText(1)
+				cosePublicKey := make([]byte, stmt.ColumnLen(1))
+				stmt.ColumnBytes(1, cosePublicKey)
 
-				publicKey := make([]byte, stmt.ColumnLen(2))
-				stmt.ColumnBytes(2, publicKey)
+				webauthnAuthenticatorId := make([]byte, stmt.ColumnLen(2))
+				stmt.ColumnBytes(2, webauthnAuthenticatorId)
 
-				webauthnAuthenticatorId := make([]byte, stmt.ColumnLen(3))
-				stmt.ColumnBytes(3, webauthnAuthenticatorId)
-
-				name := stmt.ColumnText(4)
+				name := stmt.ColumnText(3)
 
 				passkey := passkeyStruct{
 					id:                      passkeyId,
 					userId:                  user.id,
 					webauthnCredentialId:    webauthnCredentialId,
-					signatureAlgorithm:      signatureAlgorithm,
-					publicKey:               publicKey,
+					cosePublicKey:           cosePublicKey,
 					webauthnAuthenticatorId: webauthnAuthenticatorId,
 					name:                    name,
 					createdAt:               nowSecondPrecision,

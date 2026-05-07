@@ -9,8 +9,7 @@ CREATE TABLE passkey (
     user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
     webauthn_credential_id BLOB NOT NULL UNIQUE,
     webauthn_authenticator_id BLOB NOT NULL,
-    signature_algorithm TEXT NOT NULL,
-    public_key BLOB NOT NULL,
+    cose_public_key BLOB NOT NULL,
     name TEXT NOT NULL,
     created_at INTEGER NOT NULL
 ) STRICT;
@@ -34,8 +33,7 @@ CREATE TABLE signup (
     email_address_verification_code TEXT NOT NULL,
     email_address_verified INTEGER NOT NULL DEFAULT 0,
     passkey_webauthn_credential_id BLOB,
-    passkey_signature_algorithm TEXT,
-    passkey_public_key BLOB,
+    passkey_cose_public_key BLOB,
     passkey_webauthn_authenticator_id BLOB,
     created_at INTEGER NOT NULL
 ) STRICT;
@@ -88,8 +86,7 @@ CREATE TABLE passkey_registration (
     secret_hash BLOB NOT NULL,
     identity_verified INTEGER NOT NULL DEFAULT 0,
     passkey_webauthn_credential_id BLOB,
-    passkey_signature_algorithm TEXT,
-    passkey_public_key BLOB,
+    passkey_cose_public_key BLOB,
     passkey_webauthn_authenticator_id BLOB,
     created_at INTEGER NOT NULL
 ) STRICT;

@@ -2011,17 +2011,8 @@ func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.Respons
 		w.WriteHeader(303)
 		return
 	}
-	if passkeyRegistration.passkeySignatureAlgorithmDefined {
-		errorMessage := "passkey registration passkey signature defined"
-		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
-
-		server.setBlankPasskeyRegistrationTokenCookie(w)
-		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
-		writePageHTMLResponse(w, 500, pageHTML)
-		return
-	}
-	if passkeyRegistration.passkeyPublicKeyDefined {
-		errorMessage := "passkey registration passkey public key defined"
+	if passkeyRegistration.passkeyCOSEPublicKeyDefined {
+		errorMessage := "passkey registration passkey cose public key defined"
 		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
 
 		server.setBlankPasskeyRegistrationTokenCookie(w)
@@ -2125,17 +2116,8 @@ func (server *serverStruct) registerPasskeySetPasskeyNamePageRoute(w http.Respon
 		w.WriteHeader(303)
 		return
 	}
-	if !passkeyRegistration.passkeySignatureAlgorithmDefined {
-		errorMessage := "passkey registration passkey signature algorithm not defined"
-		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeyCreatePasskeyPage, errorMessage)
-
-		server.setBlankPasskeyRegistrationTokenCookie(w)
-		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
-		writePageHTMLResponse(w, 500, pageHTML)
-		return
-	}
-	if !passkeyRegistration.passkeyPublicKeyDefined {
-		errorMessage := "passkey registration passkey public key not defined"
+	if !passkeyRegistration.passkeyCOSEPublicKeyDefined {
+		errorMessage := "passkey registration passkey cose public key not defined"
 		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeyCreatePasskeyPage, errorMessage)
 
 		server.setBlankPasskeyRegistrationTokenCookie(w)
