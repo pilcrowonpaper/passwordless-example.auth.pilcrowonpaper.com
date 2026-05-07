@@ -13,6 +13,7 @@ func verifyPasskeyNamePattern(passkeyName string) bool {
 	if len(passkeyName) < 1 && len(passkeyName) > 50 {
 		return false
 	}
+	// Printable ASCII excluding double quotes
 	for _, char := range passkeyName {
 		if char < ' ' || char > '~' {
 			return false
