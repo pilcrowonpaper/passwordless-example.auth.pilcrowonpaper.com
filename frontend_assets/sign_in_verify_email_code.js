@@ -9,7 +9,7 @@ document.getElementById("verify-email-code-form").addEventListener("submit", asy
 
 	const formData = new FormData(event.target);
 	const emailCodeInputValue = formData.get("email_code");
-	const emailCode = emailCodeInputValue.replaceAll(" ", "").replaceAll("-", "");
+	const emailCode = emailCodeInputValue.replaceAll(" ", "").replaceAll("-", "").toUpperCase();
 
 	const actionValuesJSONObject = {
 		email_code_signin_token: emailCodeSigninToken,

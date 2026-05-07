@@ -13,7 +13,10 @@ document
 
 		const formData = new FormData(event.target);
 		const verificationCodeInputValue = formData.get("verification_code");
-		const verificationCode = verificationCodeInputValue.replaceAll(" ", "").replaceAll("-", "");
+		const verificationCode = verificationCodeInputValue
+			.replaceAll(" ", "")
+			.replaceAll("-", "")
+			.toUpperCase();
 
 		const actionValuesJSONObject = {
 			signup_token: signupToken,
