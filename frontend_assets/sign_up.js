@@ -1,10 +1,3 @@
-const clientStateEventChannel = new BroadcastChannel("client_state_event");
-clientStateEventChannel.addEventListener("message", (event) => {
-	if (event.data === "session_updated") {
-		window.location.reload();
-	}
-});
-
 document.getElementById("sign-up-form").addEventListener("submit", async (event) => {
 	event.preventDefault();
 
@@ -28,6 +21,8 @@ document.getElementById("sign-up-form").addEventListener("submit", async (event)
 		body: requestBody,
 	});
 	request.headers.set("Content-Type", "application/json");
+
+	let signupToken;
 	try {
 		const response = await fetch(request);
 		if (!response.ok) {
@@ -54,17 +49,18 @@ document.getElementById("sign-up-form").addEventListener("submit", async (event)
 			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
 		}
 
-		if (window.location.protocol === "https:") {
-			document.cookie = `signup_token=${resultJSONObject.values.signup_token}; Max-Age=3600; SameSite=Lax; Path=/; Secure`;
-		} else {
-			document.cookie = `signup_token=${resultJSONObject.values.signup_token}; Max-Age=3600; SameSite=Lax; Path=/`;
-		}
-		clientStateEventChannel.postMessage("signup_updated");
+		signupToken = resultJSONObject.values.signup_token;
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
 		submitButtonElement.disabled = false;
 		return;
+	}
+
+	if (window.location.protocol === "https:") {
+		document.cookie = `signup_token=${signupToken}; Max-Age=3600; SameSite=Lax; Path=/; Secure`;
+	} else {
+		document.cookie = `signup_token=${signupToken}; Max-Age=3600; SameSite=Lax; Path=/`;
 	}
 
 	window.location.href = "/sign-up/verify-email-address";

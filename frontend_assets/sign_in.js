@@ -4,13 +4,6 @@ let passkeySigninId = pageDataJSONObject.passkey_signin_id;
 let passkeySigninChallenge = Uint8Array.fromBase64(pageDataJSONObject.passkey_signin_challenge);
 let passkeySigninRefreshAt = new Date(Date.now() + 50 * 60 * 1000);
 
-const clientStateEventChannel = new BroadcastChannel("client_state_event");
-clientStateEventChannel.addEventListener("message", (event) => {
-	if (event.data === "session_updated") {
-		window.location.reload();
-	}
-});
-
 document
 	.getElementById("sign-in-with-email-code-form")
 	.addEventListener("submit", async (event) => {
@@ -79,7 +72,6 @@ document
 		} else {
 			document.cookie = `email_code_signin_token=${emailCodeSigninToken}; Max-Age=3600; SameSite=Lax; Path=/`;
 		}
-		clientStateEventChannel.postMessage("email_code_signin_updated");
 
 		window.location.href = "/sign-in/verify-email-code";
 	});
@@ -193,7 +185,6 @@ signInWithPasskeyButtonElement.addEventListener("click", async () => {
 	} else {
 		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/`;
 	}
-	clientStateEventChannel.postMessage("session_updated");
 
 	window.location.href = "/account";
 });
@@ -263,7 +254,6 @@ async function startConditionalMediationCredentialRequest() {
 	} else {
 		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/`;
 	}
-	clientStateEventChannel.postMessage("session_updated");
 
 	window.location.href = "/account";
 }

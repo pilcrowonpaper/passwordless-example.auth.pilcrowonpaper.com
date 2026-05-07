@@ -2,13 +2,6 @@ const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText)
 const sessionToken = pageDataJSONObject.session_token;
 const passkeyDeletionToken = pageDataJSONObject.passkey_deletion_token;
 
-const clientStateEventChannel = new BroadcastChannel("client_state_event");
-clientStateEventChannel.addEventListener("message", (event) => {
-	if (event.data === "session_updated" || event.data === "passkey_deletion_updated") {
-		window.location.reload();
-	}
-});
-
 const confirmButtonElement = document.getElementById("confirm-button");
 confirmButtonElement.addEventListener("click", async () => {
 	confirmButtonElement.disabled = true;
@@ -45,7 +38,6 @@ confirmButtonElement.addEventListener("click", async () => {
 					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
 					document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-				clientStateEventChannel.postMessage("session_updated");
 
 				alert("Your session has expired.");
 				window.location.href = "/sign-in";
@@ -55,12 +47,12 @@ confirmButtonElement.addEventListener("click", async () => {
 				resultJSONObject.error_code === "invalid_passkey_deletion_token" ||
 				resultJSONObject.error_code === "session_mismatch"
 			) {
-				clientStateEventChannel.postMessage("passkey_deletion_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
 					document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
+
 				alert("Your session has expired.");
 				window.location.href = "/account";
 				return;
@@ -79,7 +71,6 @@ confirmButtonElement.addEventListener("click", async () => {
 	} else {
 		document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/`;
 	}
-	clientStateEventChannel.postMessage("passkey_deletion_updated");
 
 	window.location.href = "/account";
 });
@@ -120,7 +111,6 @@ cancelButtonElement.addEventListener("click", async () => {
 					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
 					document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-				clientStateEventChannel.postMessage("session_updated");
 
 				alert("Your session has expired.");
 				window.location.href = "/sign-in";
@@ -130,12 +120,12 @@ cancelButtonElement.addEventListener("click", async () => {
 				resultJSONObject.error_code === "invalid_passkey_deletion_token" ||
 				resultJSONObject.error_code === "session_mismatch"
 			) {
-				clientStateEventChannel.postMessage("passkey_deletion_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
 					document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
+
 				alert("Your session has expired.");
 				window.location.href = "/account";
 				return;
@@ -154,7 +144,6 @@ cancelButtonElement.addEventListener("click", async () => {
 	} else {
 		document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/`;
 	}
-	clientStateEventChannel.postMessage("passkey_deletion_updated");
 
 	window.location.href = "/account";
 });

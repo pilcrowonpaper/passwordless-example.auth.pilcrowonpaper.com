@@ -3,13 +3,6 @@ const signupToken = pageDataJSONObject.signup_token;
 const signupTargetUserId = pageDataJSONObject.signup_target_user_id;
 const signupEmailAddress = pageDataJSONObject.signup_email_address;
 
-const clientStateEventChannel = new BroadcastChannel("client_state_event");
-clientStateEventChannel.addEventListener("message", (event) => {
-	if (event.data === "signup_updated" || event.data === "signup_passkey_registration_updated") {
-		window.location.reload();
-	}
-});
-
 const createPasskeyButtonElement = document.getElementById("create-passkey-button");
 createPasskeyButtonElement.addEventListener("click", async () => {
 	createPasskeyButtonElement.disabled = true;
@@ -88,12 +81,12 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 		const resultJSONObject = await response.json();
 		if (!resultJSONObject.ok) {
 			if (resultJSONObject.error_code === "invalid_signup_token") {
-				clientStateEventChannel.postMessage("signup_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
+
 				alert("Your session has expired.");
 				window.location.href = "/sign-up";
 				return;
@@ -116,8 +109,6 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 		createPasskeyButtonElement.disabled = false;
 		return;
 	}
-
-	clientStateEventChannel.postMessage("signup_updated");
 
 	window.location.href = "/sign-up/register-passkey/set-passkey-name";
 });
@@ -156,7 +147,6 @@ skipButtonElement.addEventListener("click", async () => {
 				} else {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-				clientStateEventChannel.postMessage("signup_updated");
 
 				alert("Your session has expired.");
 				window.location.href = "/sign-up";
@@ -168,7 +158,6 @@ skipButtonElement.addEventListener("click", async () => {
 				} else {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-				clientStateEventChannel.postMessage("signup_updated");
 
 				alert("This email address is already linked to an existing account.");
 				window.location.href = "/sign-up";
@@ -192,8 +181,6 @@ skipButtonElement.addEventListener("click", async () => {
 		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/`;
 		document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
 	}
-	clientStateEventChannel.postMessage("signup_updated");
-	clientStateEventChannel.postMessage("session_updated");
 
 	window.location.href = "/account";
 });

@@ -1,13 +1,6 @@
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
 const signupToken = pageDataJSONObject.signup_token;
 
-const clientStateEventChannel = new BroadcastChannel("client_state_event");
-clientStateEventChannel.addEventListener("message", (event) => {
-	if (event.data === "signup_updated" || event.data === "signup_passkey_registration_updated") {
-		window.location.reload();
-	}
-});
-
 document.getElementById("set-passkey-name-form").addEventListener("submit", async (event) => {
 	event.preventDefault();
 
@@ -48,7 +41,6 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 				} else {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-				clientStateEventChannel.postMessage("signup_updated");
 
 				alert("Your session has expired.");
 				window.location.href = "/sign-up";
@@ -65,7 +57,6 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 				} else {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-				clientStateEventChannel.postMessage("signup_updated");
 
 				alert("This email address is already linked to an existing account.");
 				window.location.href = "/sign-up";
@@ -89,8 +80,6 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/`;
 		document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
 	}
-	clientStateEventChannel.postMessage("signup_updated");
-	clientStateEventChannel.postMessage("session_updated");
 
 	window.location.href = "/account";
 });

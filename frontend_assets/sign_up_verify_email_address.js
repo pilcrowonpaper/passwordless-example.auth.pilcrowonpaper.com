@@ -1,13 +1,6 @@
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
 const signupToken = pageDataJSONObject.signup_token;
 
-const clientStateEventChannel = new BroadcastChannel("client_state_event");
-clientStateEventChannel.addEventListener("message", (event) => {
-	if (event.data === "session_updated" || event.data === "signup_updated") {
-		window.location.reload();
-	}
-});
-
 document
 	.getElementById("verify-verification-code-form")
 	.addEventListener("submit", async (event) => {
@@ -46,12 +39,12 @@ document
 			const resultJSONObject = await response.json();
 			if (!resultJSONObject.ok) {
 				if (resultJSONObject.error_code === "invalid_signup_token") {
-					clientStateEventChannel.postMessage("signup_updated");
 					if (window.location.protocol === "https:") {
 						document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 					} else {
 						document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
 					}
+
 					alert("Your session has expired.");
 					window.location.href = "/sign-up";
 					return;
@@ -68,8 +61,6 @@ document
 				}
 				throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
 			}
-
-			clientStateEventChannel.postMessage("signup_updated");
 		} catch (error) {
 			console.error(error);
 			alert("An unexpected error occurred. Please try again.");
@@ -109,12 +100,12 @@ resendVerificationCodeButtonElement.addEventListener("click", async () => {
 		const resultJSONObject = await response.json();
 		if (!resultJSONObject.ok) {
 			if (resultJSONObject.error_code === "invalid_signup_token") {
-				clientStateEventChannel.postMessage("signup_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
+
 				alert("Your session has expired.");
 				window.location.href = "/sign-up";
 				return;
@@ -165,30 +156,29 @@ cancelButtonElement.addEventListener("click", async () => {
 		const resultJSONObject = await response.json();
 		if (!resultJSONObject.ok) {
 			if (resultJSONObject.error_code === "invalid_signup_token") {
-				clientStateEventChannel.postMessage("signup_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
 					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
+
 				alert("Your session has expired.");
 				window.location.href = "/sign-up";
 				return;
 			}
 			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
 		}
-
-		clientStateEventChannel.postMessage("signup_updated");
-		if (window.location.protocol === "https:") {
-			document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-		} else {
-			document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
-		}
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
 		cancelButtonElement.disabled = false;
 		return;
+	}
+
+	if (window.location.protocol === "https:") {
+		document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
+	} else {
+		document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
 	}
 
 	window.location.href = "/sign-up";

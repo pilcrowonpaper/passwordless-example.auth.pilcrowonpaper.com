@@ -1,13 +1,6 @@
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
 const emailCodeSigninToken = pageDataJSONObject.email_code_signin_token;
 
-const clientStateEventChannel = new BroadcastChannel("client_state_event");
-clientStateEventChannel.addEventListener("message", (event) => {
-	if (event.data === "session_updated" || event.data === "email_code_signin_updated") {
-		window.location.reload();
-	}
-});
-
 document.getElementById("verify-email-code-form").addEventListener("submit", async (event) => {
 	event.preventDefault();
 
@@ -49,7 +42,6 @@ document.getElementById("verify-email-code-form").addEventListener("submit", asy
 				} else {
 					document.cookie = `email_code_signin_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-				clientStateEventChannel.postMessage("email_code_signin_updated");
 
 				alert("Your session has expired.");
 				window.location.href = "/account";
@@ -83,8 +75,6 @@ document.getElementById("verify-email-code-form").addEventListener("submit", asy
 		document.cookie = `email_code_signin_token=; Max-Age=0; SameSite=Lax; Path=/`;
 		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/`;
 	}
-	clientStateEventChannel.postMessage("email_code_signin_updated");
-	clientStateEventChannel.postMessage("session_updated");
 
 	window.location.href = "/account";
 });
@@ -123,7 +113,6 @@ cancelButtonElement.addEventListener("click", async () => {
 				} else {
 					document.cookie = `email_code_signin_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-				clientStateEventChannel.postMessage("email_code_signin_updated");
 
 				alert("Your session has expired.");
 				window.location.href = "/account";
@@ -137,8 +126,6 @@ cancelButtonElement.addEventListener("click", async () => {
 		cancelButtonElement.disabled = false;
 		return;
 	}
-
-	clientStateEventChannel.postMessage("email_code_signin_updated");
 
 	window.location.href = "/sign-in";
 });
@@ -177,7 +164,6 @@ resendEmailCodeButtonElement.addEventListener("click", async () => {
 				} else {
 					document.cookie = `email_code_signin_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-				clientStateEventChannel.postMessage("email_code_signin_updated");
 
 				alert("Your session has expired.");
 				window.location.href = "/account";

@@ -4,13 +4,6 @@ const passkeyRegistrationToken = pageDataJSONObject.passkey_registration_token;
 const userId = pageDataJSONObject.user_id;
 const userEmailAddress = pageDataJSONObject.user_email_address;
 
-const clientStateEventChannel = new BroadcastChannel("client_state_event");
-clientStateEventChannel.addEventListener("message", (event) => {
-	if (event.data === "session_updated" || event.data === "passkey_registration_updated") {
-		window.location.reload();
-	}
-});
-
 const createPasskeyButtonElement = document.getElementById("create-passkey-button");
 createPasskeyButtonElement.addEventListener("click", async () => {
 	createPasskeyButtonElement.disabled = true;
@@ -39,7 +32,6 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 		const resultJSONObject = await response.json();
 		if (!resultJSONObject.ok) {
 			if (resultJSONObject.error_code === "invalid_session_token") {
-				clientStateEventChannel.postMessage("session_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
@@ -161,7 +153,6 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
 					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-				clientStateEventChannel.postMessage("session_updated");
 
 				alert("Your session has expired.");
 				window.location.href = "/sign-in";
@@ -171,12 +162,12 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 				resultJSONObject.error_code === "invalid_passkey_registration_token" ||
 				resultJSONObject.error_code === "session_mismatch"
 			) {
-				clientStateEventChannel.postMessage("passkey_registration_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
 					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
+
 				alert("Your session has expired.");
 				window.location.href = "/account";
 				return;
@@ -199,8 +190,6 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 		createPasskeyButtonElement.disabled = false;
 		return;
 	}
-
-	clientStateEventChannel.postMessage("passkey_registration_updated");
 
 	window.location.href = "/register-passkey/set-passkey-name";
 });
@@ -241,7 +230,6 @@ cancelButtonElement.addEventListener("click", async () => {
 					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
 					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
-				clientStateEventChannel.postMessage("session_updated");
 
 				alert("Your session has expired.");
 				window.location.href = "/sign-in";
@@ -251,12 +239,12 @@ cancelButtonElement.addEventListener("click", async () => {
 				resultJSONObject.error_code === "invalid_passkey_registration_token" ||
 				resultJSONObject.error_code === "session_mismatch"
 			) {
-				clientStateEventChannel.postMessage("passkey_registration_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
 					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
+
 				alert("Your session has expired.");
 				window.location.href = "/account";
 				return;
@@ -275,7 +263,6 @@ cancelButtonElement.addEventListener("click", async () => {
 	} else {
 		document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
 	}
-	clientStateEventChannel.postMessage("passkey_registration_updated");
 
 	window.location.href = "/account";
 });

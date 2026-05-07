@@ -5,13 +5,6 @@ const identityVerificationPasskeyVerificationChallenge = Uint8Array.fromBase64(
 	pageDataJSONObject.identity_verification_passkey_verification_challenge,
 );
 
-const clientStateEventChannel = new BroadcastChannel("client_state_event");
-clientStateEventChannel.addEventListener("message", (event) => {
-	if (event.data === "session_updated" || event.data === "identity_verification_updated") {
-		window.location.reload();
-	}
-});
-
 const verifyWithPasskeyButtonElement = document.getElementById("verify-with-passkey-button");
 if (verifyWithPasskeyButtonElement !== null) {
 	verifyWithPasskeyButtonElement.addEventListener("click", async () => {
@@ -41,7 +34,6 @@ if (verifyWithPasskeyButtonElement !== null) {
 			const resultJSONObject = await response.json();
 			if (!resultJSONObject.ok) {
 				if (resultJSONObject.error_code === "invalid_session_token") {
-					clientStateEventChannel.postMessage("session_updated");
 					if (window.location.protocol === "https:") {
 						document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 						document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
@@ -49,6 +41,7 @@ if (verifyWithPasskeyButtonElement !== null) {
 						document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
 						document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 					}
+
 					alert("Your session has expired.");
 					window.location.href = "/sign-in";
 					return;
@@ -129,7 +122,6 @@ if (verifyWithPasskeyButtonElement !== null) {
 			const resultJSONObject = await response.json();
 			if (!resultJSONObject.ok) {
 				if (resultJSONObject.error_code === "invalid_session_token") {
-					clientStateEventChannel.postMessage("session_updated");
 					if (window.location.protocol === "https:") {
 						document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 						document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
@@ -137,6 +129,7 @@ if (verifyWithPasskeyButtonElement !== null) {
 						document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
 						document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 					}
+
 					alert("Your session has expired.");
 					window.location.href = "/sign-in";
 					return;
@@ -145,12 +138,12 @@ if (verifyWithPasskeyButtonElement !== null) {
 					resultJSONObject.error_code === "invalid_identity_verification_token" ||
 					resultJSONObject.error_code === "session_mismatch"
 				) {
-					clientStateEventChannel.postMessage("identity_verification_updated");
 					if (window.location.protocol === "https:") {
 						document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 					} else {
 						document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 					}
+
 					alert("Your session has expired.");
 					window.location.href = "/account";
 					return;
@@ -175,8 +168,6 @@ if (verifyWithPasskeyButtonElement !== null) {
 			verifyWithPasskeyButtonElement.disabled = false;
 			return;
 		}
-
-		clientStateEventChannel.postMessage("identity_verification_updated");
 
 		if (verifiedAction === "email_address_update") {
 			window.location.href = "/update-email-address/set-new-email-address";
@@ -224,7 +215,6 @@ verifyWithEmailCodeButtonElement.addEventListener("click", async () => {
 		const resultJSONObject = await response.json();
 		if (!resultJSONObject.ok) {
 			if (resultJSONObject.error_code === "invalid_session_token") {
-				clientStateEventChannel.postMessage("session_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
@@ -232,6 +222,7 @@ verifyWithEmailCodeButtonElement.addEventListener("click", async () => {
 					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
+
 				alert("Your session has expired.");
 				window.location.href = "/sign-in";
 				return;
@@ -240,12 +231,12 @@ verifyWithEmailCodeButtonElement.addEventListener("click", async () => {
 				resultJSONObject.error_code === "invalid_identity_verification_token" ||
 				resultJSONObject.error_code === "session_mismatch"
 			) {
-				clientStateEventChannel.postMessage("identity_verification_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
+
 				alert("Your session has expired.");
 				window.location.href = "/account";
 				return;
@@ -263,8 +254,6 @@ verifyWithEmailCodeButtonElement.addEventListener("click", async () => {
 		verifyWithEmailCodeButtonElement.disabled = false;
 		return;
 	}
-
-	clientStateEventChannel.postMessage("identity_verification_updated");
 
 	window.location.href = "/verify-identity/verify-email-code";
 });
@@ -299,7 +288,6 @@ cancelButtonElement.addEventListener("click", async () => {
 		const resultJSONObject = await response.json();
 		if (!resultJSONObject.ok) {
 			if (resultJSONObject.error_code === "invalid_session_token") {
-				clientStateEventChannel.postMessage("session_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
@@ -307,6 +295,7 @@ cancelButtonElement.addEventListener("click", async () => {
 					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
+
 				alert("Your session has expired.");
 				window.location.href = "/sign-in";
 				return;
@@ -315,12 +304,12 @@ cancelButtonElement.addEventListener("click", async () => {
 				resultJSONObject.error_code === "invalid_identity_verification_token" ||
 				resultJSONObject.error_code === "session_mismatch"
 			) {
-				clientStateEventChannel.postMessage("identity_verification_updated");
 				if (window.location.protocol === "https:") {
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 				} else {
 					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 				}
+
 				alert("Your session has expired.");
 				window.location.href = "/account";
 				return;
@@ -341,7 +330,6 @@ cancelButtonElement.addEventListener("click", async () => {
 	} else {
 		document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
 	}
-	clientStateEventChannel.postMessage("identity_verification_updated");
 
 	if (cancelledAction === "email_address_update") {
 		if (window.location.protocol === "https:") {
@@ -349,28 +337,24 @@ cancelButtonElement.addEventListener("click", async () => {
 		} else {
 			document.cookie = `email_address_update_token=; Max-Age=0; SameSite=Lax; Path=/`;
 		}
-		clientStateEventChannel.postMessage("email_address_update_updated");
 	} else if (cancelledAction === "passkey_registration") {
 		if (window.location.protocol === "https:") {
 			document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 		} else {
 			document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
 		}
-		clientStateEventChannel.postMessage("passkey_registration_updated");
 	} else if (cancelledAction === "passkey_deletion") {
 		if (window.location.protocol === "https:") {
 			document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 		} else {
 			document.cookie = `passkey_deletion_token=; Max-Age=0; SameSite=Lax; Path=/`;
 		}
-		clientStateEventChannel.postMessage("passkey_deletion_updated");
 	} else if (cancelledAction === "account_deletion") {
 		if (window.location.protocol === "https:") {
 			document.cookie = `account_deletion_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
 		} else {
 			document.cookie = `account_deletion_token=; Max-Age=0; SameSite=Lax; Path=/`;
 		}
-		clientStateEventChannel.postMessage("account_deletion_updated");
 	}
 
 	window.location.href = "/account";
