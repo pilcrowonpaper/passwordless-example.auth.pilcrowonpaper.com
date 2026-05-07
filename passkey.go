@@ -28,10 +28,6 @@ func verifyPasskeyNamePattern(passkeyName string) bool {
 	return true
 }
 
-func verifyPasskeyWebauthnCredentialIdLength(webauthnCredentialId []byte) bool {
-	return len(webauthnCredentialId) > 0 && len(webauthnCredentialId) < 1024
-}
-
 const (
 	passkeySignatureAlgorithmEd25519              = "ed25519"
 	passkeySignatureAlgorithmECDSAP256SHA256      = "ecdsa.p256.sha256"
