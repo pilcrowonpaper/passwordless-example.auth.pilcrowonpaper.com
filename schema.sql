@@ -50,7 +50,6 @@ CREATE TABLE email_code_signin (
     id TEXT NOT NULL PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
     secret_hash BLOB NOT NULL,
-    email_address TEXT NOT NULL,
     email_code TEXT NOT NULL,
     created_at INTEGER NOT NULL
 ) STRICT;
@@ -64,7 +63,6 @@ CREATE TABLE identity_verification (
     verifying_action TEXT NOT NULL,
     verifying_action_id TEXT NOT NULL,
     passkey_verification_challenge BLOB NOT NULL,
-    email_address TEXT,
     email_code TEXT,
     created_at INTEGER NOT NULL
 ) STRICT;

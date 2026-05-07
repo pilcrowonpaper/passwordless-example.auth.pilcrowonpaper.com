@@ -21,15 +21,13 @@ type identityVerificationStruct struct {
 	verifyingAction              string
 	verifyingActionId            string
 	passkeyVerificationChallenge []byte
-	emailAddressDefined          bool
-	emailAddress                 string
 	emailCodeDefined             bool
 	emailCode                    string
 	createdAt                    time.Time
 }
 
 func (identityVerification *identityVerificationStruct) compareEmailCode(emailCode string) bool {
-	if !identityVerification.emailAddressDefined {
+	if !identityVerification.emailCodeDefined {
 		return false
 	}
 	return constantTimeCompareStrings(emailCode, identityVerification.emailCode)
@@ -61,7 +59,7 @@ func (server *serverStruct) getIdentityVerification(identityVerificationId strin
 	}
 	err = sqlitex.Execute(
 		databaseReadConnection,
-		"SELECT session_id, secret_hash, verifying_action, verifying_action_id, passkey_verification_challenge, email_address, email_code, created_at FROM identity_verification WHERE id = ?",
+		"SELECT session_id, secret_hash, verifying_action, verifying_action_id, passkey_verification_challenge, email_code, created_at FROM identity_verification WHERE id = ?",
 		&sqlitex.ExecOptions{
 			Args: []any{identityVerificationId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -77,21 +75,14 @@ func (server *serverStruct) getIdentityVerification(identityVerificationId strin
 				passkeyVerificationChallenge := make([]byte, stmt.ColumnLen(4))
 				stmt.ColumnBytes(4, passkeyVerificationChallenge)
 
-				emailAddressDefined := false
-				var emailAddress string
-				if !stmt.ColumnIsNull(5) {
-					emailAddressDefined = true
-					emailAddress = stmt.ColumnText(5)
-				}
-
 				emailCodeDefined := false
 				var emailCode string
-				if !stmt.ColumnIsNull(6) {
+				if !stmt.ColumnIsNull(5) {
 					emailCodeDefined = true
-					emailCode = stmt.ColumnText(6)
+					emailCode = stmt.ColumnText(5)
 				}
 
-				createdAt := time.Unix(stmt.ColumnInt64(7), 0)
+				createdAt := time.Unix(stmt.ColumnInt64(6), 0)
 
 				identityVerification := identityVerificationStruct{
 					id:                           identityVerificationId,
@@ -100,8 +91,6 @@ func (server *serverStruct) getIdentityVerification(identityVerificationId strin
 					verifyingAction:              verifyingAction,
 					verifyingActionId:            verifyingActionId,
 					passkeyVerificationChallenge: passkeyVerificationChallenge,
-					emailAddressDefined:          emailAddressDefined,
-					emailAddress:                 emailAddress,
 					emailCodeDefined:             emailCodeDefined,
 					emailCode:                    emailCode,
 					createdAt:                    createdAt,
@@ -128,6 +117,42 @@ func (server *serverStruct) getIdentityVerification(identityVerificationId strin
 	}
 
 	return identityVerification, nil
+}
+
+func (server *serverStruct) getIdentityVerificationUserEmailAddress(identityVerificationId string) (string, error) {
+	userEmailAddresses := []string{}
+
+	databaseReadConnection, err := server.databaseReadConnectionPool.Take(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("failed to take database read connection: %s", err.Error())
+	}
+	err = sqlitex.Execute(
+		databaseReadConnection,
+		`SELECT user.email_address FROM identity_verification
+INNER JOIN session ON identity_verification.session_id = session.id
+INNER JOIN user ON session.user_id = user.id
+WHERE identity_verification.id = ?`,
+		&sqlitex.ExecOptions{
+			Args: []any{identityVerificationId},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				userEmailAddress := stmt.ColumnText(0)
+				userEmailAddresses = append(userEmailAddresses, userEmailAddress)
+				return nil
+			},
+		},
+	)
+	server.databaseReadConnectionPool.Put(databaseReadConnection)
+	if err != nil {
+		return "", fmt.Errorf("failed to select from identity_verification table: %s", err.Error())
+	}
+
+	if len(userEmailAddresses) < 1 {
+		return "", errItemNotFound
+	}
+
+	userEmailAddress := userEmailAddresses[0]
+
+	return userEmailAddress, nil
 }
 
 var errInvalidIdentityVerificationToken = errors.New("invalid identity verification token")
@@ -192,31 +217,81 @@ func (server *serverStruct) setBlankIdentityVerificationTokenCookie(w http.Respo
 	http.SetCookie(w, cookie)
 }
 
-func (server *serverStruct) issueIdentityVerificationEmailCode(identityVerificationId string, emailAddress string) (string, error) {
+func (server *serverStruct) issueIdentityVerificationEmailCode(identityVerificationId string) (string, string, error) {
 	emailCode := generateEmailCode()
 
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
-		return "", fmt.Errorf("failed to take database write connection: %s", err.Error())
+		return "", "", fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
 
-	err = sqlitex.Execute(databaseWriteConnection, "UPDATE identity_verification SET email_address = ?, email_code = ? WHERE id = ?", &sqlitex.ExecOptions{
-		Args: []any{emailAddress, emailCode, identityVerificationId},
-	})
-	if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
-		return "", errItemConflict
-	}
+	err = sqlitex.Execute(databaseWriteConnection, "BEGIN IMMEDIATE", nil)
 	if err != nil {
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		return "", fmt.Errorf("failed to update identity_verification table: %s", err.Error())
-	}
-	affectedCount := databaseWriteConnection.Changes()
-	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-	if affectedCount < 1 {
-		return "", errItemNotFound
+		return "", "", fmt.Errorf("failed to begin transaction: %s", err.Error())
 	}
 
-	return emailCode, nil
+	userEmailAddresses := []string{}
+	err = sqlitex.Execute(
+		databaseWriteConnection,
+		`SELECT user.email_address FROM identity_verification
+INNER JOIN session ON identity_verification.session_id = session.id
+INNER JOIN user ON session.user_id = user.id
+WHERE identity_verification.id = ?`,
+		&sqlitex.ExecOptions{
+			Args: []any{identityVerificationId},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				userEmailAddress := stmt.ColumnText(0)
+				userEmailAddresses = append(userEmailAddresses, userEmailAddress)
+				return nil
+			},
+		},
+	)
+	if err != nil {
+		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
+		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
+		if rollbackErr != nil {
+			return "", "", fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+		}
+		return "", "", fmt.Errorf("failed to select from identity_verification table: %s", err.Error())
+	}
+	if len(userEmailAddresses) < 1 {
+		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
+		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
+		if rollbackErr != nil {
+			return "", "", fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+		}
+
+		return "", "", errItemNotFound
+	}
+	userEmailAddress := userEmailAddresses[0]
+
+	err = sqlitex.Execute(databaseWriteConnection, "UPDATE identity_verification SET email_code = ? WHERE id = ?", &sqlitex.ExecOptions{
+		Args: []any{emailCode, identityVerificationId},
+	})
+	if err != nil {
+		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
+		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
+		if rollbackErr != nil {
+			return "", "", fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+		}
+
+		return "", "", fmt.Errorf("failed to update identity_verification table: %s", err.Error())
+	}
+
+	err = sqlitex.Execute(databaseWriteConnection, "COMMIT", nil)
+	if err != nil {
+		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
+		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
+		if rollbackErr != nil {
+			return "", "", fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+		}
+		return "", "", fmt.Errorf("failed to commit transaction: %s", err.Error())
+	}
+
+	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
+
+	return emailCode, userEmailAddress, nil
 }
 
 func (server *serverStruct) revokeIdentityVerificationEmailCode(identityVerificationId string) error {
@@ -224,7 +299,7 @@ func (server *serverStruct) revokeIdentityVerificationEmailCode(identityVerifica
 	if err != nil {
 		return fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
-	err = sqlitex.Execute(databaseWriteConnection, "UPDATE identity_verification SET email_address = NULL, email_code_hash = NULL, email_code_salt = NULL WHERE id = ?", &sqlitex.ExecOptions{
+	err = sqlitex.Execute(databaseWriteConnection, "UPDATE identity_verification SET email_code = NULL WHERE id = ?", &sqlitex.ExecOptions{
 		Args: []any{identityVerificationId},
 	})
 	if err != nil {

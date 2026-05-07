@@ -387,6 +387,23 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	if actionName == actionSendEmailCodeSigninEmailCode {
+		emailCodeSigninToken, err := values.GetString("email_code_signin_token")
+		if err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		errorCode := server.sendEmailCodeSigninEmailCodeAction(requestId, clientIPAddress, emailCodeSigninToken)
+		if errorCode != "" {
+			server.logActionErrorResult(requestId, clientIPAddress, actionSendEmailCodeSigninEmailCode, errorCode)
+			writeActionErrorResult(w, requestId, errorCode)
+			return
+		}
+		server.logActionSuccessResult(requestId, clientIPAddress, actionSendEmailCodeSigninEmailCode)
+		writeActionSuccessResult(w, requestId, "{}")
+		return
+	}
+
 	if actionName == actionVerifyEmailCodeSigninEmailCode {
 		emailCodeSigninToken, err := values.GetString("email_code_signin_token")
 		if err != nil {
@@ -594,6 +611,34 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 		server.logActionSuccessResult(requestId, clientIPAddress, actionRevokeIdentityVerificationEmailCode)
+
+		writeActionSuccessResult(w, requestId, "{}")
+		return
+	}
+
+	if actionName == actionSendIdentityVerificationEmailCode {
+		sessionToken, err := values.GetString("session_token")
+		if err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		identityVerificationToken, err := values.GetString("identity_verification_token")
+		if err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		errorCode := server.sendIdentityVerificationEmailCodeAction(
+			requestId,
+			clientIPAddress,
+			sessionToken,
+			identityVerificationToken,
+		)
+		if errorCode != "" {
+			server.logActionErrorResult(requestId, clientIPAddress, actionSendIdentityVerificationEmailCode, errorCode)
+			writeActionErrorResult(w, requestId, errorCode)
+			return
+		}
+		server.logActionSuccessResult(requestId, clientIPAddress, actionSendIdentityVerificationEmailCode)
 
 		writeActionSuccessResult(w, requestId, "{}")
 		return
@@ -1500,6 +1545,21 @@ func (server *serverStruct) signInVerifyEmailCodePageRoute(w http.ResponseWriter
 		return
 	}
 
+	userEmailAddress, err := server.getEmailCodeSigninUserEmailAddress(emailCodeSignin.id)
+	if errors.Is(err, errItemNotFound) {
+		server.setBlankEmailCodeSigninToken(w)
+		w.Header().Set("Location", "/sign-in")
+		w.WriteHeader(303)
+		return
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get email code signin user email address: %s", err.Error())
+		server.logRouteInternalError(requestId, clientIPAddress, routeSignInVerifyEmailCodePage, errorMessage)
+		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
+		writePageHTMLResponse(w, 500, pageHTML)
+		return
+	}
+
 	pageTitle := "Sign in with email code | Passwordless auth example"
 
 	bodyHTMLTemplate := `<h1>Sign in with email code</h1>
@@ -1509,9 +1569,12 @@ func (server *serverStruct) signInVerifyEmailCodePageRoute(w http.ResponseWriter
 	<input id="verify-email-code-form-email-code-input" name="email_code" autocomplete="one-time-code" required/>
 	<button id="verify-email-code-form-submit-button">Continue</button>
 </form>
-<button id="cancel-button" class="link-button">Cancel</button>`
+<div id="controls">
+	<button id="resend-email-code-button" class="link-button">Resend email code</button>
+	<button id="cancel-button" class="link-button">Cancel</button>
+</div`
 
-	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(emailCodeSignin.emailAddress))
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(userEmailAddress))
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
 	pageDataJSONBuilder.AddString("email_code_signin_token", emailCodeSigninToken)
@@ -1657,9 +1720,24 @@ func (server *serverStruct) verifyIdentityVerifyEmailCodePageRoute(w http.Respon
 		return
 	}
 
-	if !identityVerification.emailAddressDefined {
+	if !identityVerification.emailCodeDefined {
 		w.Header().Set("Location", "/verify-identity")
 		w.WriteHeader(303)
+		return
+	}
+
+	userEmailAddress, err := server.getIdentityVerificationUserEmailAddress(identityVerification.id)
+	if errors.Is(err, errItemNotFound) {
+		server.setBlankIdentityVerificationTokenCookie(w)
+		w.Header().Set("Location", "/sign-in")
+		w.WriteHeader(303)
+		return
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get identity verification user email address: %s", err.Error())
+		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityVerifyEmailCodePage, errorMessage)
+		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
+		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
@@ -1672,9 +1750,12 @@ func (server *serverStruct) verifyIdentityVerifyEmailCodePageRoute(w http.Respon
 	<input id="verify-email-code-form-email-code-input" name="email_code" autocomplete="one-time-code" required/>
 	<button id="verify-email-code-form-submit-button">Continue</button>
 </form>
-<button id="cancel-button" class="link-button">Cancel</button>`
+<div id="controls">
+	<button id="resend-email-code-button" class="link-button">Resend email code</button>
+	<button id="cancel-button" class="link-button">Cancel</button>
+</div>`
 
-	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(identityVerification.emailAddress))
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(userEmailAddress))
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
 	pageDataJSONBuilder.AddString("session_token", sessionToken)
