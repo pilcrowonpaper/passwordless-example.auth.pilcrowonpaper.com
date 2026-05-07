@@ -31,7 +31,7 @@ if (verifyWithPasskeyButtonElement !== null) {
 		});
 		getWebauthnCredentialIdsActionRequest.headers.set("Content-Type", "application/json");
 
-		let webauthnCredentialIds = [];
+		const webauthnCredentialIds = [];
 		try {
 			const response = await fetch(getWebauthnCredentialIdsActionRequest);
 			if (!response.ok) {

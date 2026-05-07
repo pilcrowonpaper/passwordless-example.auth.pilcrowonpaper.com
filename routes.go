@@ -2051,15 +2051,6 @@ func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.Respons
 		return
 	}
 
-	passkeys, err := server.getUserPasskeys(user.id)
-	if err != nil {
-		errorMessage := fmt.Sprintf("failed to get user passkeys: %s", err.Error())
-		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
-		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
-		writePageHTMLResponse(w, 500, pageHTML)
-		return
-	}
-
 	pageTitle := "Create a passkey | Passwordless auth example"
 
 	bodyHTML := `<h1>Create a passkey</h1>
@@ -2067,18 +2058,11 @@ func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.Respons
 <button id="create-passkey-button" class="block-button">Create</button>
 <button id="cancel-button" class="link-button">Cancel</button>`
 
-	passkeyWebauthnCredentialIdsJSONArray := json.NewArrayBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	for _, passkey := range passkeys {
-		passkeyWebauthnCredentialIdsJSONArray.AddString(base64.StdEncoding.EncodeToString(passkey.webauthnCredentialId))
-	}
-	passkeyWebauthnCredentialIdsJSON := passkeyWebauthnCredentialIdsJSONArray.Done()
-
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
 	pageDataJSONBuilder.AddString("session_token", sessionToken)
 	pageDataJSONBuilder.AddString("passkey_registration_token", passkeyRegistrationToken)
 	pageDataJSONBuilder.AddString("user_id", user.id)
 	pageDataJSONBuilder.AddString("user_email_address", user.emailAddress)
-	pageDataJSONBuilder.AddJSON("passkey_webauthn_credential_ids", passkeyWebauthnCredentialIdsJSON)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, registerPasskeyCreatePasskeyPageScript, registerPasskeyCreatePasskeyPageStylesheet, pageDataJSON)
