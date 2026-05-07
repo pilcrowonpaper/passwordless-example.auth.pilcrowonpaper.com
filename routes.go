@@ -1274,7 +1274,7 @@ We do not share or sell this data to any third parties.</p>
 <p>The email address must be lowercase and no more than 100 characters long.</p>
 <form id="sign-up-form">
 	<label for="sign-up-form-email-address-input">Email address</label>
-	<input id="sign-up-form-email-address-input" name="email_address" type="email" required />
+	<input id="sign-up-form-email-address-input" name="email_address" type="email" required maxlength="100" />
 	<button id="sign-up-form-submit-button">Continue</button>
 </form>
 <a id="sign-in-link" href="/sign-in" class="link-button">Sign in with an existing account</a>`
@@ -1523,7 +1523,7 @@ func (server *serverStruct) signInPageRoute(w http.ResponseWriter, r *http.Reque
 	bodyHTML := `<h1>Sign in</h1>
 <form id="sign-in-with-email-code-form">
 	<label for="sign-in-with-email-code-form-email-address-input">Email address (lowercase)</label>
-	<input id="sign-in-with-email-code-form-email-address-input" name="email_address" type="email" autocomplete="webauthn" required/>
+	<input id="sign-in-with-email-code-form-email-address-input" name="email_address" type="email" autocomplete="webauthn" required maxlength="100" />
 	<button id="sign-in-with-email-code-form-submit-button">Continue</button>
 </form>
 <button id="sign-in-with-passkey-button" class="link-button">Sign in with passkeys</button>
@@ -1852,7 +1852,7 @@ func (server *serverStruct) updateEmailAddressSetNewEmailAddressPageRoute(w http
 	bodyHTML := `<h1>Set your new email address</h1>
 <form id="set-new-email-address-form">
 	<label for="set-new-email-address-form-new-email-address-input">New email address</label>
-	<input id="set-new-email-address-form-new-email-address-input" name="new_email_address" type="email" required />
+	<input id="set-new-email-address-form-new-email-address-input" name="new_email_address" type="email" required maxlength="100" />
 	<button id="set-new-email-address-form-submit-button">Continue</button>
 </form>
 <button id="cancel-button" class="link-button">Cancel</button>`
