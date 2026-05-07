@@ -40,7 +40,8 @@ type serverStruct struct {
 
 	userEmailCodeVerificationAuthenticationRateLimit *ratelimit.LimitStruct
 	emailAddressVerificationRateLimit                *ratelimit.LimitStruct
-	emailRateLimit                                   *ratelimit.LimitStruct
+	unverifiedEmailAddressEmailRateLimit             *ratelimit.LimitStruct
+	userEmailRateLimit                               *ratelimit.LimitStruct
 	requestRateLimit                                 *ratelimit.LimitStruct
 }
 
@@ -100,7 +101,8 @@ func createServer(emailClient emailClientInterface, origin string, webauthnRelyi
 
 	userEmailCodeVerificationAuthenticationRateLimit := ratelimit.NewLimit(1_000, 5, time.Minute)
 	emailAddressVerificationRateLimit := ratelimit.NewLimit(1_000, 5, time.Minute)
-	emailRateLimit := ratelimit.NewLimit(1_000, 5, 30*time.Minute)
+	unverifiedEmailAddressEmailRateLimit := ratelimit.NewLimit(1_000, 5, 30*time.Minute)
+	userEmailRateLimit := ratelimit.NewLimit(1_000, 5, time.Minute)
 	requestRateLimit := ratelimit.NewLimit(10_000, 100, time.Second)
 
 	webauthnAuthenticatorNames := map[string]string{}
@@ -143,7 +145,8 @@ func createServer(emailClient emailClientInterface, origin string, webauthnRelyi
 		logging:                     logging,
 		userEmailCodeVerificationAuthenticationRateLimit: userEmailCodeVerificationAuthenticationRateLimit,
 		emailAddressVerificationRateLimit:                emailAddressVerificationRateLimit,
-		emailRateLimit:                                   emailRateLimit,
+		unverifiedEmailAddressEmailRateLimit:             unverifiedEmailAddressEmailRateLimit,
+		userEmailRateLimit:                               userEmailRateLimit,
 		requestRateLimit:                                 requestRateLimit,
 	}
 

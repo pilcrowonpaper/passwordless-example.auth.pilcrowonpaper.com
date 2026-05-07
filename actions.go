@@ -78,7 +78,7 @@ func (server *serverStruct) startSignupAction(requestId string, clientIPAddress 
 		return "", errorCodeEmailAddressAlreadyUsed
 	}
 
-	rateLimitAllowed := server.emailRateLimit.Consume(emailAddress)
+	rateLimitAllowed := server.unverifiedEmailAddressEmailRateLimit.Consume(emailAddress)
 	if !rateLimitAllowed {
 		return "", errorCodeRateLimited
 	}
@@ -158,7 +158,7 @@ func (server *serverStruct) sendSignupEmailAddressVerificationCodeAction(request
 		return errorCodeEmailAddressAlreadyVerified
 	}
 
-	rateLimitAllowed := server.emailRateLimit.Consume(signup.emailAddress)
+	rateLimitAllowed := server.unverifiedEmailAddressEmailRateLimit.Consume(signup.emailAddress)
 	if !rateLimitAllowed {
 		return errorCodeRateLimited
 	}
@@ -634,7 +634,7 @@ func (server *serverStruct) startEmailCodeSigninAction(requestId string, clientI
 		return "", errorCodeUnexpectedError
 	}
 
-	rateLimitAllowed := server.emailRateLimit.Consume(user.emailAddress)
+	rateLimitAllowed := server.unverifiedEmailAddressEmailRateLimit.Consume(user.emailAddress)
 	if !rateLimitAllowed {
 		return "", errorCodeRateLimited
 	}
@@ -723,7 +723,7 @@ func (server *serverStruct) sendEmailCodeSigninEmailCodeAction(requestId string,
 		return errorCodeUnexpectedError
 	}
 
-	rateLimitAllowed := server.emailRateLimit.Consume(userEmailAddress)
+	rateLimitAllowed := server.unverifiedEmailAddressEmailRateLimit.Consume(userEmailAddress)
 	if !rateLimitAllowed {
 		return errorCodeRateLimited
 	}
@@ -1076,6 +1076,7 @@ func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId s
 		errorCodeSessionMismatch                  = "session_mismatch"
 		errorCodeConflict                         = "conflict"
 		errorCodeUnexpectedError                  = "unexpected_error"
+		errorCodeRateLimited                      = "rate_limited"
 	)
 
 	session, err := server.validateSessionToken(sessionToken)
@@ -1100,6 +1101,11 @@ func (server *serverStruct) issueIdentityVerificationEmailCodeAction(requestId s
 
 	if identityVerification.sessionId != session.id {
 		return errorCodeSessionMismatch
+	}
+
+	rateLimitAllowed := server.userEmailRateLimit.Consume(session.userId)
+	if !rateLimitAllowed {
+		return errorCodeRateLimited
 	}
 
 	emailCode, userEmailAddress, err := server.issueIdentityVerificationEmailCode(identityVerification.id)
@@ -1195,6 +1201,7 @@ func (server *serverStruct) sendIdentityVerificationEmailCodeAction(requestId st
 		errorCodeEmailCodeNotIssued               = "email_code_not_issued"
 		errorCodeConflict                         = "conflict"
 		errorCodeUnexpectedError                  = "unexpected_error"
+		errorCodeRateLimited                      = "rate_limited"
 	)
 
 	session, err := server.validateSessionToken(sessionToken)
@@ -1233,6 +1240,11 @@ func (server *serverStruct) sendIdentityVerificationEmailCodeAction(requestId st
 		errorMessage := fmt.Sprintf("failed to get identity verification user email address: %s", err.Error())
 		server.logActionInternalError(requestId, clientIPAddress, actionSendIdentityVerificationEmailCode, errorMessage)
 		return errorCodeUnexpectedError
+	}
+
+	rateLimitAllowed := server.userEmailRateLimit.Consume(session.userId)
+	if !rateLimitAllowed {
+		return errorCodeRateLimited
 	}
 
 	server.logIdentityVerificationEmailCodeIssuedRequestEvent(
@@ -1495,7 +1507,7 @@ func (server *serverStruct) setEmailAddressUpdateNewEmailAddressAction(requestId
 		return errorCodeEmailAddressAlreadyUsed
 	}
 
-	rateLimitAllowed := server.emailRateLimit.Consume(newEmailAddress)
+	rateLimitAllowed := server.unverifiedEmailAddressEmailRateLimit.Consume(newEmailAddress)
 	if !rateLimitAllowed {
 		return errorCodeRateLimited
 	}
@@ -1567,7 +1579,7 @@ func (server *serverStruct) sendEmailAddressUpdateNewEmailAddressVerificationCod
 		return errorCodeUnexpectedError
 	}
 
-	rateLimitAllowed := server.emailRateLimit.Consume(emailAddressUpdate.newEmailAddress)
+	rateLimitAllowed := server.unverifiedEmailAddressEmailRateLimit.Consume(emailAddressUpdate.newEmailAddress)
 	if !rateLimitAllowed {
 		return errorCodeRateLimited
 	}

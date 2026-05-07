@@ -201,6 +201,11 @@ verifyWithEmailCodeButtonElement.addEventListener("click", async () => {
 				window.location.href = "/account";
 				return;
 			}
+			if (resultJSONObject.error_code === "rate_limited") {
+				alert("Too many attempts. Please try again later.");
+				verifyWithEmailCodeButtonElement.disabled = false;
+				return;
+			}
 			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
 		}
 	} catch (error) {

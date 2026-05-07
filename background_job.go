@@ -28,7 +28,7 @@ func (server *serverStruct) clearDataBackgroundJob() {
 		server.userEmailCodeVerificationAuthenticationRateLimit.Clear()
 		server.emailAddressVerificationRateLimit.Clear()
 		server.userEmailCodeVerificationAuthenticationRateLimit.Clear()
-		server.emailRateLimit.Clear()
+		server.unverifiedEmailAddressEmailRateLimit.Clear()
 
 		server.logBackgroundJobRunCompletion(runId, backgroundJobClearData)
 	}
