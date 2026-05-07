@@ -28,6 +28,8 @@ const (
 	actionSignOut           = "sign_out"
 	actionSignOutAllDevices = "sign_out_all_devices"
 
+	actionGetWebauthnCredentialIds = "get_webauthn_credential_ids"
+
 	actionCancelIdentityVerification                         = "cancel_identity_verification"
 	actionVerifyIdentityVerificationPasskeyWebauthnSignature = "verify_identity_verification_passkey_webauthn_signature"
 	actionIssueIdentityVerificationEmailCode                 = "issue_identity_verification_email_code"
@@ -864,6 +866,38 @@ func (server *serverStruct) signOutAllDevicesAction(requestId string, clientIPAd
 	}
 
 	return ""
+}
+
+func (server *serverStruct) getWebauthnCredentialIdsAction(requestId string, clientIPAddress string, sessionToken string) ([][]byte, string) {
+	const (
+		errorCodeInvalidSessionToken = "invalid_session_token"
+		errorCodeConflict            = "conflict"
+		errorCodeUnexpectedError     = "unexpected_error"
+	)
+
+	session, err := server.validateSessionToken(sessionToken)
+	if errors.Is(err, errInvalidSessionToken) {
+		return nil, errorCodeInvalidSessionToken
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to validate session token: %s", err.Error())
+		server.logActionInternalError(requestId, clientIPAddress, actionGetWebauthnCredentialIds, errorMessage)
+		return nil, errorCodeUnexpectedError
+	}
+
+	passkeys, err := server.getUserPasskeys(session.userId)
+	if err != nil {
+		errorMessage := fmt.Sprintf("failed to get user passkeys: %s", err.Error())
+		server.logActionInternalError(requestId, clientIPAddress, actionGetWebauthnCredentialIds, errorMessage)
+		return nil, errorCodeUnexpectedError
+	}
+
+	webauthnCredentialIds := [][]byte{}
+	for _, passkey := range passkeys {
+		webauthnCredentialIds = append(webauthnCredentialIds, passkey.webauthnCredentialId)
+	}
+
+	return webauthnCredentialIds, ""
 }
 
 func (server *serverStruct) cancelIdentityVerificationAction(requestId string, clientIPAddress string, sessionToken string, identityVerificationToken string) (string, string) {

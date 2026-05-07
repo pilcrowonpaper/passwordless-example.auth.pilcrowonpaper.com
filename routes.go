@@ -464,6 +464,34 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	if actionName == actionGetWebauthnCredentialIds {
+		sessionToken, err := values.GetString("session_token")
+		if err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		webauthnCredentialIds, errorCode := server.getWebauthnCredentialIdsAction(requestId, clientIPAddress, sessionToken)
+		if errorCode != "" {
+			server.logActionErrorResult(requestId, clientIPAddress, actionGetWebauthnCredentialIds, errorCode)
+			writeActionErrorResult(w, requestId, errorCode)
+			return
+		}
+		server.logActionSuccessResult(requestId, clientIPAddress, actionGetWebauthnCredentialIds)
+
+		webauthnCredentialIdsJSONBuilder := json.NewArrayBuilder(json.MinimalStringCharacterEscapingBehavior)
+		for _, webauthnCredentialId := range webauthnCredentialIds {
+			encodedWebauthnCredentialId := base64.StdEncoding.EncodeToString(webauthnCredentialId)
+			webauthnCredentialIdsJSONBuilder.AddString(encodedWebauthnCredentialId)
+		}
+		webauthnCredentialIdsJSON := webauthnCredentialIdsJSONBuilder.Done()
+
+		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
+		resultValuesJSONBuilder.AddJSON("webauthn_credential_ids", webauthnCredentialIdsJSON)
+		resultValuesJSON := resultValuesJSONBuilder.Done()
+		writeActionSuccessResult(w, requestId, resultValuesJSON)
+		return
+	}
+
 	if actionName == actionCancelIdentityVerification {
 		sessionToken, err := values.GetString("session_token")
 		if err != nil {
