@@ -1657,7 +1657,7 @@ func (server *serverStruct) verifyIdentityPageRoute(w http.ResponseWriter, r *ht
 		return
 	}
 
-	passkeys, err := server.getUserPasskeys(session.userId)
+	passkeyCount, err := server.getUserPasskeyCount(session.userId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user passkeys: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityPage, errorMessage)
@@ -1669,7 +1669,7 @@ func (server *serverStruct) verifyIdentityPageRoute(w http.ResponseWriter, r *ht
 	pageTitle := "Verify your identity | Passwordless auth example"
 
 	var controlsHTML string
-	if len(passkeys) > 0 {
+	if passkeyCount > 0 {
 		controlsHTML = `<div id="controls">
 	<button id="verify-with-passkey-button" class="block-button">Verify with passkeys</button>
 	<button id="verify-with-email-code-button" class="link-button">Verify with email code</button>
@@ -1686,17 +1686,10 @@ func (server *serverStruct) verifyIdentityPageRoute(w http.ResponseWriter, r *ht
 <button id="cancel-button" class="link-button">Cancel</button>`
 	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, controlsHTML)
 
-	passkeyWebauthnCredentialIdsJSONArray := json.NewArrayBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	for _, passkey := range passkeys {
-		passkeyWebauthnCredentialIdsJSONArray.AddString(base64.StdEncoding.EncodeToString(passkey.webauthnCredentialId))
-	}
-	passkeyWebauthnCredentialIdsJSON := passkeyWebauthnCredentialIdsJSONArray.Done()
-
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
 	pageDataJSONBuilder.AddString("session_token", sessionToken)
 	pageDataJSONBuilder.AddString("identity_verification_token", identityVerificationToken)
 	pageDataJSONBuilder.AddString("identity_verification_passkey_verification_challenge", base64.StdEncoding.EncodeToString(identityVerification.passkeyVerificationChallenge))
-	pageDataJSONBuilder.AddJSON("passkey_webauthn_credential_ids", passkeyWebauthnCredentialIdsJSON)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, verifyIdentityPageScript, verifyIdentityPageStylesheet, pageDataJSON)

@@ -31,7 +31,6 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 			{ type: "public-key", alg: -7 },
 			{ type: "public-key", alg: -257 },
 		],
-		excludeCredentials: [],
 		authenticatorSelection: {
 			residentKey: "required",
 			requireResidentKey: true,
