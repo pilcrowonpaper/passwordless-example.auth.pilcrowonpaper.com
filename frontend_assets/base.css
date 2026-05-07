@@ -70,7 +70,7 @@ form input {
 	margin-bottom: 1rem;
 }
 
-p + p {
+main p + p {
 	margin-top: 1rem;
 }
 
