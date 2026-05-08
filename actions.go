@@ -951,7 +951,7 @@ func (server *serverStruct) cancelIdentityVerificationAction(requestId string, c
 			return "", errorCodeUnexpectedError
 		}
 	case identityVerificationVerifyingActionAccountDeletion:
-		err = server.deleteEmailAddressUpdate(identityVerification.verifyingActionId)
+		err = server.deleteAccountDeletion(identityVerification.verifyingActionId)
 		if errors.Is(err, errItemNotFound) {
 			return "", errorCodeConflict
 		}
