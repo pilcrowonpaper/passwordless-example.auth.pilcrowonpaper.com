@@ -180,7 +180,13 @@ func (server *serverStruct) getPasskeyDeletion(PasskeyDeletionId string) (passke
 		return passkeyDeletionStruct{}, errItemNotFound
 	}
 
-	return passkeyDeletions[0], nil
+	passkeDeletion := passkeyDeletions[0]
+
+	if time.Since(passkeDeletion.createdAt) >= time.Hour {
+		return passkeyDeletionStruct{}, errItemNotFound
+	}
+
+	return passkeDeletion, nil
 }
 
 const passkeyDeletionTokenCookieName = "passkey_deletion_token"

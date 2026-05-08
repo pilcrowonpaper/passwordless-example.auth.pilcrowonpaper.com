@@ -210,7 +210,13 @@ func (server *serverStruct) getPasskeyRegistration(passkeyRegistrationId string)
 		return passkeyRegistrationStruct{}, errItemNotFound
 	}
 
-	return passkeyRegistrations[0], nil
+	passkeyRegistration := passkeyRegistrations[0]
+
+	if time.Since(passkeyRegistration.createdAt) >= time.Hour {
+		return passkeyRegistrationStruct{}, errItemNotFound
+	}
+
+	return passkeyRegistration, nil
 }
 
 const passkeyRegistrationTokenCookieName = "passkey_registration_token"
