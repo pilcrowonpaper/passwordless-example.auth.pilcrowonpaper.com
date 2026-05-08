@@ -9,7 +9,7 @@ let passkeySigninWebauthnChallenge = Uint8Array.fromBase64(
 let passkeySigninAttemptRefreshAt = new Date(Date.now() + 50 * 60 * 1000);
 
 const conditionalWebauthnRequestAbortController = new AbortController();
-setTimeout(conditionalWebauthnRequestAbortController.abort, 50 * 60 * 1000);
+setTimeout(() => conditionalWebauthnRequestAbortController.abort(), 60 * 60 * 1000);
 
 const signInWithEmailCodeFormElement = document.getElementById("sign-in-with-email-code-form");
 signInWithEmailCodeFormElement.addEventListener("submit", handleSignInWithEmailCodeFormSubmitEvent);
