@@ -179,12 +179,12 @@ async function completePasskeySignin(credential) {
 	}
 
 	if (!actionResult.ok) {
-		if (result.errorCode === "passkey_signin_not_found") {
+		if (actionResult.errorCode === "passkey_signin_not_found") {
 			alert("Please try again.");
 			signInWithPasskeyButtonElement.disabled = false;
 			return;
 		}
-		if (result.errorCode === "passkey_not_found") {
+		if (actionResult.errorCode === "passkey_not_found") {
 			alert("This passkey is not registered.");
 			signInWithPasskeyButtonElement.disabled = false;
 			return;
