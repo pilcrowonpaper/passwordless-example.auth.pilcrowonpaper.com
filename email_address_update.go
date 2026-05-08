@@ -337,7 +337,7 @@ WHERE user.id = auth_session.user_id
 AND email_address_update_session.id = ?
 AND email_address_update_session.new_email_address IS NOT NULL
 AND email_address_update_session.identity_verified = 1
-RETURNING user.id`,
+RETURNING id`,
 		&sqlitex.ExecOptions{
 			Args: []any{emailAddressUpdateSessionId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
