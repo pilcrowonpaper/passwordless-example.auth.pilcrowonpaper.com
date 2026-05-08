@@ -148,6 +148,8 @@ async function handleVerifyWithPasskeyButtonClickEvent() {
 
 	const verifiedAction = actionResult.valuesJSONObject.verified_action;
 
+	deleteIdentityVerificationTokenCookie();
+
 	if (verifiedAction === "email_address_update") {
 		window.location.href = "/update-email-address/set-new-email-address";
 	} else if (verifiedAction === "passkey_registration") {
