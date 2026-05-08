@@ -23,14 +23,6 @@ function deleteSignupTokenCookie() {
 	setCookieWithExpiration("signup_token", "", 0);
 }
 
-function setSigninTokenCookie(signinToken) {
-	setCookieWithExpiration("signin_token", signinToken, 86400);
-}
-
-function deleteSigninTokenCookie() {
-	setCookieWithExpiration("signin_token", "", 0);
-}
-
 function setEmailAddressUpdateTokenCookie(emailAddressUpdateToken) {
 	setCookieWithExpiration("email_address_update_token", emailAddressUpdateToken, 86400);
 }
