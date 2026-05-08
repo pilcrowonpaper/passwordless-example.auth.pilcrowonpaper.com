@@ -144,8 +144,8 @@ func checkLatestSchema(databaseConnection *sqlite.Conn, currentSchemaHash []byte
 func (server *serverStruct) cleanDatabase() error {
 	now := time.Now()
 	userCreatedThreshold := now.Add(24 * time.Hour * -1)
-	signupCreationThreshold := now.Add(60 * time.Minute * -1)
-	passkeySigninAttemptCreationThreshold := now.Add(60 * time.Minute * -1)
+	signupCreationThreshold := now.Add(time.Hour * -1)
+	passkeySigninAttemptCreationThreshold := now.Add(time.Hour * -1)
 
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
