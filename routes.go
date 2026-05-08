@@ -1850,6 +1850,7 @@ func (server *serverStruct) updateEmailAddressSetNewEmailAddressPageRoute(w http
 	pageTitle := "Set your new email address | Passwordless auth example"
 
 	bodyHTML := `<h1>Set your new email address</h1>
+<p>The email address must be lowercase and no more than 100 characters long.</p>
 <form id="set-new-email-address-form">
 	<label for="set-new-email-address-form-new-email-address-input">New email address</label>
 	<input id="set-new-email-address-form-new-email-address-input" name="new_email_address" type="email" required maxlength="100" />
