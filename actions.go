@@ -752,7 +752,7 @@ func (server *serverStruct) verifyEmailCodeSigninEmailCodeAction(requestId strin
 		return "", errorCodeConflict
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to get email code singin user email address: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to get email code signin session user email address: %s", err.Error())
 		server.logActionInternalError(requestId, clientIPAddress, actionVerifyEmailCodeSigninEmailCode, errorMessage)
 		return "", errorCodeUnexpectedError
 	}
