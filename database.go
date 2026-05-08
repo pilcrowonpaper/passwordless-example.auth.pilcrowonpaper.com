@@ -145,7 +145,7 @@ func (server *serverStruct) cleanDatabase() error {
 	now := time.Now()
 	userCreatedThreshold := now.Add(24 * time.Hour * -1)
 	signupCreationThreshold := now.Add(60 * time.Minute * -1)
-	passkeySigninCreationThreshold := now.Add(60 * time.Minute * -1)
+	passkeySigninAttemptCreationThreshold := now.Add(60 * time.Minute * -1)
 
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
@@ -170,7 +170,7 @@ func (server *serverStruct) cleanDatabase() error {
 		return fmt.Errorf("failed to delete from user table: %s", err.Error())
 	}
 
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM signup WHERE created_at <= ?", &sqlitex.ExecOptions{
+	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM signup_session WHERE created_at <= ?", &sqlitex.ExecOptions{
 		Args: []any{signupCreationThreshold.Unix()},
 	})
 	if err != nil {
@@ -179,11 +179,11 @@ func (server *serverStruct) cleanDatabase() error {
 		if rollbackErr != nil {
 			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
-		return fmt.Errorf("failed to delete from signup table: %s", err.Error())
+		return fmt.Errorf("failed to delete from signup_session table: %s", err.Error())
 	}
 
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM passkey_signin WHERE created_at <= ?", &sqlitex.ExecOptions{
-		Args: []any{passkeySigninCreationThreshold.Unix()},
+	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM passkey_signin_attempt WHERE created_at <= ?", &sqlitex.ExecOptions{
+		Args: []any{passkeySigninAttemptCreationThreshold.Unix()},
 	})
 	if err != nil {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
@@ -191,7 +191,7 @@ func (server *serverStruct) cleanDatabase() error {
 		if rollbackErr != nil {
 			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
-		return fmt.Errorf("failed to delete from signup table: %s", err.Error())
+		return fmt.Errorf("failed to delete from signup_session table: %s", err.Error())
 	}
 	err = sqlitex.Execute(databaseWriteConnection, "COMMIT", nil)
 	if err != nil {

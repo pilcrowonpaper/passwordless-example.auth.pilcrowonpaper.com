@@ -89,7 +89,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(400)
 			return
 		}
-		signupToken, errorCode := server.startSignupAction(requestId, clientIPAddress, emailAddress)
+		signupSessionToken, errorCode := server.startSignupAction(requestId, clientIPAddress, emailAddress)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionStartSignup, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -98,19 +98,19 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		server.logActionSuccessResult(requestId, clientIPAddress, actionStartSignup)
 
 		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
-		resultValuesJSONBuilder.AddString("signup_token", signupToken)
+		resultValuesJSONBuilder.AddString("signup_session_token", signupSessionToken)
 		resultValuesJSON := resultValuesJSONBuilder.Done()
 		writeActionSuccessResult(w, requestId, resultValuesJSON)
 		return
 	}
 
 	if actionName == actionCancelSignup {
-		signupToken, err := values.GetString("signup_token")
+		signupSessionToken, err := values.GetString("signup_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.cancelSignupAction(requestId, clientIPAddress, signupToken)
+		errorCode := server.cancelSignupAction(requestId, clientIPAddress, signupSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionCancelSignup, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -123,12 +123,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionSendSignupEmailAddressVerificationCode {
-		signupToken, err := values.GetString("signup_token")
+		signupSessionToken, err := values.GetString("signup_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.sendSignupEmailAddressVerificationCodeAction(requestId, clientIPAddress, signupToken)
+		errorCode := server.sendSignupEmailAddressVerificationCodeAction(requestId, clientIPAddress, signupSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionSendSignupEmailAddressVerificationCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -141,7 +141,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionVerifySignupEmailAddressVerificationCode {
-		signupToken, err := values.GetString("signup_token")
+		signupSessionToken, err := values.GetString("signup_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -151,7 +151,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.verifySignupEmailAddressVerificationCodeAction(requestId, clientIPAddress, signupToken, verificationCode)
+		errorCode := server.verifySignupEmailAddressVerificationCodeAction(requestId, clientIPAddress, signupSessionToken, verificationCode)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionVerifySignupEmailAddressVerificationCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -164,12 +164,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionCompleteSignupWithoutPasskeyRegistration {
-		signupToken, err := values.GetString("signup_token")
+		signupSessionToken, err := values.GetString("signup_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		sessionToken, errorCode := server.completeSignupWithoutPasskeyRegistrationAction(requestId, clientIPAddress, signupToken)
+		authSessionToken, errorCode := server.completeSignupWithoutPasskeyRegistrationAction(requestId, clientIPAddress, signupSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionCompleteSignupWithoutPasskeyRegistration, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -178,14 +178,14 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		server.logActionSuccessResult(requestId, clientIPAddress, actionCompleteSignupWithoutPasskeyRegistration)
 
 		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
-		resultValuesJSONBuilder.AddString("session_token", sessionToken)
+		resultValuesJSONBuilder.AddString("auth_session_token", authSessionToken)
 		resultValuesJSON := resultValuesJSONBuilder.Done()
 		writeActionSuccessResult(w, requestId, resultValuesJSON)
 		return
 	}
 
 	if actionName == actionSetSignupPasskeyWebauthnCredential {
-		signupToken, err := values.GetString("signup_token")
+		signupSessionToken, err := values.GetString("signup_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -204,7 +204,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		errorCode := server.setSignupPasskeyWebauthnCredentialAction(
 			requestId,
 			clientIPAddress,
-			signupToken,
+			signupSessionToken,
 			webauthnAuthenticatorData,
 		)
 		if errorCode != "" {
@@ -219,7 +219,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionSetSignupPasskeyName {
-		signupToken, err := values.GetString("signup_token")
+		signupSessionToken, err := values.GetString("signup_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -229,7 +229,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(400)
 			return
 		}
-		sessionToken, errorCode := server.setSignupPasskeyNameAction(requestId, clientIPAddress, signupToken, passkeyName)
+		authSessionToken, errorCode := server.setSignupPasskeyNameAction(requestId, clientIPAddress, signupSessionToken, passkeyName)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionSetSignupPasskeyName, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -238,14 +238,14 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		server.logActionSuccessResult(requestId, clientIPAddress, actionSetSignupPasskeyName)
 
 		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
-		resultValuesJSONBuilder.AddString("session_token", sessionToken)
+		resultValuesJSONBuilder.AddString("auth_session_token", authSessionToken)
 		resultValuesJSON := resultValuesJSONBuilder.Done()
 		writeActionSuccessResult(w, requestId, resultValuesJSON)
 		return
 	}
 
 	if actionName == actionStartPasskeySignin {
-		passkeySigninId, challenge, errorCode := server.startPasskeySigninAction(requestId, clientIPAddress)
+		passkeySigninAttemptId, challenge, errorCode := server.startPasskeySigninAction(requestId, clientIPAddress)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionStartPasskeySignin, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -254,21 +254,21 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		server.logActionSuccessResult(requestId, clientIPAddress, actionStartPasskeySignin)
 
 		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
-		resultValuesJSONBuilder.AddString("passkey_signin_id", passkeySigninId)
-		resultValuesJSONBuilder.AddString("challenge", base64.StdEncoding.EncodeToString(challenge))
+		resultValuesJSONBuilder.AddString("passkey_signin_attempt_id", passkeySigninAttemptId)
+		resultValuesJSONBuilder.AddString("webauthn_challenge", base64.StdEncoding.EncodeToString(challenge))
 		resultValuesJSON := resultValuesJSONBuilder.Done()
 		writeActionSuccessResult(w, requestId, resultValuesJSON)
 		return
 	}
 
 	if actionName == actionCancelPasskeySignin {
-		passkeySigninId, err := values.GetString("passkey_signin_id")
+		passkeySigninAttemptId, err := values.GetString("passkey_signin_attempt_id")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
 
-		errorCode := server.cancelPasskeySigninAction(requestId, clientIPAddress, passkeySigninId)
+		errorCode := server.cancelPasskeySigninAction(requestId, clientIPAddress, passkeySigninAttemptId)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionStartPasskeySignin, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -281,7 +281,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionVerifyPasskeySigninWebauthnSignature {
-		passkeySigninId, err := values.GetString("passkey_signin_id")
+		passkeySigninAttemptId, err := values.GetString("passkey_signin_attempt_id")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -326,10 +326,10 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(400)
 			return
 		}
-		sessionToken, errorCode := server.verifyPasskeySigninWebauthnSignatureAction(
+		authSessionToken, errorCode := server.verifyPasskeySigninWebauthnSignatureAction(
 			requestId,
 			clientIPAddress,
-			passkeySigninId,
+			passkeySigninAttemptId,
 			webauthnCredentialId,
 			webauthnAuthenticatorData,
 			webauthnClientDataJSON,
@@ -343,7 +343,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		server.logActionSuccessResult(requestId, clientIPAddress, actionVerifyPasskeySigninWebauthnSignature)
 
 		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
-		resultValuesJSONBuilder.AddString("session_token", sessionToken)
+		resultValuesJSONBuilder.AddString("auth_session_token", authSessionToken)
 		resultValuesJSON := resultValuesJSONBuilder.Done()
 		writeActionSuccessResult(w, requestId, resultValuesJSON)
 		return
@@ -355,7 +355,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(400)
 			return
 		}
-		emailCodeSigninToken, errorCode := server.startEmailCodeSigninAction(requestId, clientIPAddress, emailAddress)
+		emailCodeSigninSessionToken, errorCode := server.startEmailCodeSigninAction(requestId, clientIPAddress, emailAddress)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionStartEmailCodeSignin, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -364,19 +364,19 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		server.logActionSuccessResult(requestId, clientIPAddress, actionStartEmailCodeSignin)
 
 		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
-		resultValuesJSONBuilder.AddString("email_code_signin_token", emailCodeSigninToken)
+		resultValuesJSONBuilder.AddString("email_code_signin_session_token", emailCodeSigninSessionToken)
 		resultValuesJSON := resultValuesJSONBuilder.Done()
 		writeActionSuccessResult(w, requestId, resultValuesJSON)
 		return
 	}
 
 	if actionName == actionCancelEmailCodeSignin {
-		emailCodeSigninToken, err := values.GetString("email_code_signin_token")
+		emailCodeSigninSessionToken, err := values.GetString("email_code_signin_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.cancelEmailCodeSigninAction(requestId, clientIPAddress, emailCodeSigninToken)
+		errorCode := server.cancelEmailCodeSigninAction(requestId, clientIPAddress, emailCodeSigninSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionCancelEmailCodeSignin, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -388,12 +388,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionSendEmailCodeSigninEmailCode {
-		emailCodeSigninToken, err := values.GetString("email_code_signin_token")
+		emailCodeSigninSessionToken, err := values.GetString("email_code_signin_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.sendEmailCodeSigninEmailCodeAction(requestId, clientIPAddress, emailCodeSigninToken)
+		errorCode := server.sendEmailCodeSigninEmailCodeAction(requestId, clientIPAddress, emailCodeSigninSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionSendEmailCodeSigninEmailCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -405,7 +405,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionVerifyEmailCodeSigninEmailCode {
-		emailCodeSigninToken, err := values.GetString("email_code_signin_token")
+		emailCodeSigninSessionToken, err := values.GetString("email_code_signin_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -415,7 +415,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(400)
 			return
 		}
-		sessionToken, errorCode := server.verifyEmailCodeSigninEmailCodeAction(requestId, clientIPAddress, emailCodeSigninToken, emailCode)
+		authSessionToken, errorCode := server.verifyEmailCodeSigninEmailCodeAction(requestId, clientIPAddress, emailCodeSigninSessionToken, emailCode)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionVerifyEmailCodeSigninEmailCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -424,14 +424,14 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		server.logActionSuccessResult(requestId, clientIPAddress, actionVerifyEmailCodeSigninEmailCode)
 
 		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
-		resultValuesJSONBuilder.AddString("session_token", sessionToken)
+		resultValuesJSONBuilder.AddString("auth_session_token", authSessionToken)
 		resultValuesJSON := resultValuesJSONBuilder.Done()
 		writeActionSuccessResult(w, requestId, resultValuesJSON)
 		return
 	}
 
 	if actionName == actionSignOut {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -448,7 +448,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionSignOutAllDevices {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -465,7 +465,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionGetWebauthnCredentialIds {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -493,17 +493,17 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionCancelIdentityVerification {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		identityVerificationToken, err := values.GetString("identity_verification_token")
+		identityVerificationSessionToken, err := values.GetString("identity_verification_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		cancelledAction, errorCode := server.cancelIdentityVerificationAction(requestId, clientIPAddress, sessionToken, identityVerificationToken)
+		cancelledAction, errorCode := server.cancelIdentityVerificationAction(requestId, clientIPAddress, sessionToken, identityVerificationSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionCancelIdentityVerification, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -519,12 +519,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionVerifyIdentityVerificationPasskeyWebauthnSignature {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		identityVerificationToken, err := values.GetString("identity_verification_token")
+		identityVerificationSessionToken, err := values.GetString("identity_verification_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -573,7 +573,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			requestId,
 			clientIPAddress,
 			sessionToken,
-			identityVerificationToken,
+			identityVerificationSessionToken,
 			webauthnCredentialId,
 			webauthnAuthenticatorData,
 			webauthnClientDataJSON,
@@ -594,17 +594,17 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionIssueIdentityVerificationEmailCode {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		identityVerificationToken, err := values.GetString("identity_verification_token")
+		identityVerificationSessionToken, err := values.GetString("identity_verification_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.issueIdentityVerificationEmailCodeAction(requestId, clientIPAddress, sessionToken, identityVerificationToken)
+		errorCode := server.issueIdentityVerificationEmailCodeAction(requestId, clientIPAddress, sessionToken, identityVerificationSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionIssueIdentityVerificationEmailCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -617,12 +617,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionRevokeIdentityVerificationEmailCode {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		identityVerificationToken, err := values.GetString("identity_verification_token")
+		identityVerificationSessionToken, err := values.GetString("identity_verification_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -631,7 +631,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			requestId,
 			clientIPAddress,
 			sessionToken,
-			identityVerificationToken,
+			identityVerificationSessionToken,
 		)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionRevokeIdentityVerificationEmailCode, errorCode)
@@ -645,12 +645,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionSendIdentityVerificationEmailCode {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		identityVerificationToken, err := values.GetString("identity_verification_token")
+		identityVerificationSessionToken, err := values.GetString("identity_verification_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -659,7 +659,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			requestId,
 			clientIPAddress,
 			sessionToken,
-			identityVerificationToken,
+			identityVerificationSessionToken,
 		)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionSendIdentityVerificationEmailCode, errorCode)
@@ -673,12 +673,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionVerifyIdentityVerificationEmailCode {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		identityVerificationToken, err := values.GetString("identity_verification_token")
+		identityVerificationSessionToken, err := values.GetString("identity_verification_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -692,7 +692,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			requestId,
 			clientIPAddress,
 			sessionToken,
-			identityVerificationToken,
+			identityVerificationSessionToken,
 			emailCode,
 		)
 		if errorCode != "" {
@@ -710,12 +710,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionStartEmailAddressUpdate {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		emailAddressUpdateToken, identityVerificationToken, errorCode := server.startEmailAddressUpdateAction(requestId, clientIPAddress, sessionToken)
+		emailAddressUpdateSessionToken, identityVerificationSessionToken, errorCode := server.startEmailAddressUpdateAction(requestId, clientIPAddress, sessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionStartEmailAddressUpdate, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -724,25 +724,25 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		server.logActionSuccessResult(requestId, clientIPAddress, actionStartEmailAddressUpdate)
 
 		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
-		resultValuesJSONBuilder.AddString("email_address_update_token", emailAddressUpdateToken)
-		resultValuesJSONBuilder.AddString("identity_verification_token", identityVerificationToken)
+		resultValuesJSONBuilder.AddString("email_address_update_session_token", emailAddressUpdateSessionToken)
+		resultValuesJSONBuilder.AddString("identity_verification_session_token", identityVerificationSessionToken)
 		resultValuesJSON := resultValuesJSONBuilder.Done()
 		writeActionSuccessResult(w, requestId, resultValuesJSON)
 		return
 	}
 
 	if actionName == actionCancelEmailAddressUpdate {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		emailAddressUpdateToken, err := values.GetString("email_address_update_token")
+		emailAddressUpdateSessionToken, err := values.GetString("email_address_update_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.cancelEmailAddressUpdateAction(requestId, clientIPAddress, sessionToken, emailAddressUpdateToken)
+		errorCode := server.cancelEmailAddressUpdateAction(requestId, clientIPAddress, sessionToken, emailAddressUpdateSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionStartEmailAddressUpdate, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -754,12 +754,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionSetEmailAddressUpdateNewEmailAddress {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		emailAddressUpdateToken, err := values.GetString("email_address_update_token")
+		emailAddressUpdateSessionToken, err := values.GetString("email_address_update_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -769,7 +769,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.setEmailAddressUpdateNewEmailAddressAction(requestId, clientIPAddress, sessionToken, emailAddressUpdateToken, newEmailAddress)
+		errorCode := server.setEmailAddressUpdateNewEmailAddressAction(requestId, clientIPAddress, sessionToken, emailAddressUpdateSessionToken, newEmailAddress)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionSetEmailAddressUpdateNewEmailAddress, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -781,17 +781,17 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionSendEmailAddressUpdateNewEmailAddressVerificationCode {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		emailAddressUpdateToken, err := values.GetString("email_address_update_token")
+		emailAddressUpdateSessionToken, err := values.GetString("email_address_update_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.sendEmailAddressUpdateNewEmailAddressVerificationCodeAction(requestId, clientIPAddress, sessionToken, emailAddressUpdateToken)
+		errorCode := server.sendEmailAddressUpdateNewEmailAddressVerificationCodeAction(requestId, clientIPAddress, sessionToken, emailAddressUpdateSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionSendEmailAddressUpdateNewEmailAddressVerificationCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -803,12 +803,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionVerifyEmailAddressUpdateNewEmailAddressVerificationCode {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		emailAddressUpdateToken, err := values.GetString("email_address_update_token")
+		emailAddressUpdateSessionToken, err := values.GetString("email_address_update_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -818,7 +818,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.verifyEmailAddressUpdateNewEmailAddressVerificationCodeAction(requestId, clientIPAddress, sessionToken, emailAddressUpdateToken, verificationCode)
+		errorCode := server.verifyEmailAddressUpdateNewEmailAddressVerificationCodeAction(requestId, clientIPAddress, sessionToken, emailAddressUpdateSessionToken, verificationCode)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionVerifyEmailAddressUpdateNewEmailAddressVerificationCode, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -830,12 +830,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionStartPasskeyRegistration {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		passkeyRegistrationToken, identityVerificationToken, errorCode := server.startPasskeyRegistrationAction(requestId, clientIPAddress, sessionToken)
+		passkeyRegistrationSessionToken, identityVerificationSessionToken, errorCode := server.startPasskeyRegistrationAction(requestId, clientIPAddress, sessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionStartPasskeyRegistration, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -844,25 +844,25 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		server.logActionSuccessResult(requestId, clientIPAddress, actionStartPasskeyRegistration)
 
 		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
-		resultValuesJSONBuilder.AddString("passkey_registration_token", passkeyRegistrationToken)
-		resultValuesJSONBuilder.AddString("identity_verification_token", identityVerificationToken)
+		resultValuesJSONBuilder.AddString("passkey_registration_session_token", passkeyRegistrationSessionToken)
+		resultValuesJSONBuilder.AddString("identity_verification_session_token", identityVerificationSessionToken)
 		resultValuesJSON := resultValuesJSONBuilder.Done()
 		writeActionSuccessResult(w, requestId, resultValuesJSON)
 		return
 	}
 
 	if actionName == actionCancelPasskeyRegistration {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		passkeyRegistrationToken, err := values.GetString("passkey_registration_token")
+		passkeyRegistrationSessionToken, err := values.GetString("passkey_registration_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.cancelPasskeyRegistrationAction(requestId, clientIPAddress, sessionToken, passkeyRegistrationToken)
+		errorCode := server.cancelPasskeyRegistrationAction(requestId, clientIPAddress, sessionToken, passkeyRegistrationSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionStartPasskeyRegistration, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -874,12 +874,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionSetPasskeyRegistrationPasskeyWebauthnCredential {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		passkeyRegistrationToken, err := values.GetString("passkey_registration_token")
+		passkeyRegistrationSessionToken, err := values.GetString("passkey_registration_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -898,7 +898,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			requestId,
 			clientIPAddress,
 			sessionToken,
-			passkeyRegistrationToken,
+			passkeyRegistrationSessionToken,
 			webauthnAuthenticatorData,
 		)
 		if errorCode != "" {
@@ -912,12 +912,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionSetPasskeyRegistrationPasskeyName {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		passkeyRegistrationToken, err := values.GetString("passkey_registration_token")
+		passkeyRegistrationSessionToken, err := values.GetString("passkey_registration_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -927,7 +927,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.setPasskeyRegistrationPasskeyNameAction(requestId, clientIPAddress, sessionToken, passkeyRegistrationToken, passkeyNameParam)
+		errorCode := server.setPasskeyRegistrationPasskeyNameAction(requestId, clientIPAddress, sessionToken, passkeyRegistrationSessionToken, passkeyNameParam)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionSetPasskeyRegistrationPasskeyName, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -939,7 +939,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionStartPasskeyDeletion {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
@@ -949,7 +949,7 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(400)
 			return
 		}
-		passkeyDeletionToken, identityVerificationToken, errorCode := server.startPasskeyDeletionAction(requestId, clientIPAddress, sessionToken, passkeyId)
+		passkeyDeletionSessionToken, identityVerificationSessionToken, errorCode := server.startPasskeyDeletionAction(requestId, clientIPAddress, sessionToken, passkeyId)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionStartPasskeyDeletion, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -958,25 +958,25 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		server.logActionSuccessResult(requestId, clientIPAddress, actionStartPasskeyDeletion)
 
 		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
-		resultValuesJSONBuilder.AddString("passkey_deletion_token", passkeyDeletionToken)
-		resultValuesJSONBuilder.AddString("identity_verification_token", identityVerificationToken)
+		resultValuesJSONBuilder.AddString("passkey_deletion_session_token", passkeyDeletionSessionToken)
+		resultValuesJSONBuilder.AddString("identity_verification_session_token", identityVerificationSessionToken)
 		resultValuesJSON := resultValuesJSONBuilder.Done()
 		writeActionSuccessResult(w, requestId, resultValuesJSON)
 		return
 	}
 
 	if actionName == actionCancelPasskeyDeletion {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		passkeyDeletionToken, err := values.GetString("passkey_deletion_token")
+		passkeyDeletionSessionToken, err := values.GetString("passkey_deletion_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.cancelPasskeyDeletionAction(requestId, clientIPAddress, sessionToken, passkeyDeletionToken)
+		errorCode := server.cancelPasskeyDeletionAction(requestId, clientIPAddress, sessionToken, passkeyDeletionSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionStartPasskeyDeletion, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -988,17 +988,17 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionConfirmPasskeyDeletion {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		passkeyDeletionToken, err := values.GetString("passkey_deletion_token")
+		passkeyDeletionSessionToken, err := values.GetString("passkey_deletion_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.confirmPasskeyDeletionAction(requestId, clientIPAddress, sessionToken, passkeyDeletionToken)
+		errorCode := server.confirmPasskeyDeletionAction(requestId, clientIPAddress, sessionToken, passkeyDeletionSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionConfirmPasskeyDeletion, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -1010,12 +1010,12 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionStartAccountDeletion {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		accountDeletionToken, identityVerificationToken, errorCode := server.startAccountDeletionAction(requestId, clientIPAddress, sessionToken)
+		accountDeletionSessionToken, identityVerificationSessionToken, errorCode := server.startAccountDeletionAction(requestId, clientIPAddress, sessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionStartAccountDeletion, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -1024,25 +1024,25 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		server.logActionSuccessResult(requestId, clientIPAddress, actionStartAccountDeletion)
 
 		resultValuesJSONBuilder := json.NewObjectBuilder(json.MinimalStringCharacterEscapingBehavior)
-		resultValuesJSONBuilder.AddString("account_deletion_token", accountDeletionToken)
-		resultValuesJSONBuilder.AddString("identity_verification_token", identityVerificationToken)
+		resultValuesJSONBuilder.AddString("account_deletion_session_token", accountDeletionSessionToken)
+		resultValuesJSONBuilder.AddString("identity_verification_session_token", identityVerificationSessionToken)
 		resultValuesJSON := resultValuesJSONBuilder.Done()
 		writeActionSuccessResult(w, requestId, resultValuesJSON)
 		return
 	}
 
 	if actionName == actionCancelAccountDeletion {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		accountDeletionToken, err := values.GetString("account_deletion_token")
+		accountDeletionSessionToken, err := values.GetString("account_deletion_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.cancelAccountDeletionAction(requestId, clientIPAddress, sessionToken, accountDeletionToken)
+		errorCode := server.cancelAccountDeletionAction(requestId, clientIPAddress, sessionToken, accountDeletionSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionStartAccountDeletion, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -1054,17 +1054,17 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if actionName == actionConfirmAccountDeletion {
-		sessionToken, err := values.GetString("session_token")
+		sessionToken, err := values.GetString("auth_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		accountDeletionToken, err := values.GetString("account_deletion_token")
+		accountDeletionSessionToken, err := values.GetString("account_deletion_session_token")
 		if err != nil {
 			w.WriteHeader(400)
 			return
 		}
-		errorCode := server.confirmAccountDeletionAction(requestId, clientIPAddress, sessionToken, accountDeletionToken)
+		errorCode := server.confirmAccountDeletionAction(requestId, clientIPAddress, sessionToken, accountDeletionSessionToken)
 		if errorCode != "" {
 			server.logActionErrorResult(requestId, clientIPAddress, actionConfirmAccountDeletion, errorCode)
 			writeActionErrorResult(w, requestId, errorCode)
@@ -1116,14 +1116,14 @@ func writeActionSuccessResult(w http.ResponseWriter, requestId string, valuesJSO
 var homePageStylesheet string
 
 func (server *serverStruct) homePageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	_, _, err := server.validateRequestSessionToken(r)
+	_, _, err := server.validateRequestAuthSessionToken(r)
 	if err == nil {
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
-	if !errors.Is(err, errInvalidSessionToken) {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+	if !errors.Is(err, errInvalidAuthSessionToken) {
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeHomePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
@@ -1150,24 +1150,24 @@ var accountPageScript string
 var accountPageStylesheet string
 
 func (server *serverStruct) accountPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	session, sessionToken, err := server.validateRequestSessionToken(r)
-	if errors.Is(err, errInvalidSessionToken) {
-		server.setBlankSessionTokenCookie(w)
+	authSession, authSessionToken, err := server.validateRequestAuthSessionToken(r)
+	if errors.Is(err, errInvalidAuthSessionToken) {
+		server.setBlankAuthSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeAccountPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	user, err := server.getUser(session.userId)
+	user, err := server.getUser(authSession.userId)
 	if errors.Is(err, errItemNotFound) {
-		server.setBlankSessionTokenCookie(w)
+		server.setBlankAuthSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
@@ -1237,7 +1237,7 @@ func (server *serverStruct) accountPageRoute(w http.ResponseWriter, r *http.Requ
 	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(user.id), html.EscapeString(user.emailAddress), passkeyListHTML, registerPasskeyButtonHTML)
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("session_token", sessionToken)
+	pageDataJSONBuilder.AddString("auth_session_token", authSessionToken)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, accountPageScript, accountPageStylesheet, pageDataJSON)
@@ -1252,14 +1252,14 @@ var signUpPageScript string
 var signUpPageStylesheet string
 
 func (server *serverStruct) signUpPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	_, _, err := server.validateRequestSessionToken(r)
+	_, _, err := server.validateRequestAuthSessionToken(r)
 	if err == nil {
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
-	if !errors.Is(err, errInvalidSessionToken) {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+	if !errors.Is(err, errInvalidAuthSessionToken) {
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
@@ -1291,36 +1291,36 @@ var signUpVerifyEmailAddressPageScript string
 var signUpVerifyEmailAddressPageStylesheet string
 
 func (server *serverStruct) signUpVerifyEmailAddressPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	_, _, err := server.validateRequestSessionToken(r)
+	_, _, err := server.validateRequestAuthSessionToken(r)
 	if err == nil {
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
-	if !errors.Is(err, errInvalidSessionToken) {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+	if !errors.Is(err, errInvalidAuthSessionToken) {
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpVerifyEmailAddressPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	signup, signupToken, err := server.validateRequestSignupToken(r)
-	if errors.Is(err, errInvalidSignupToken) {
-		server.setBlankSignupTokenCookie(w)
+	signupSession, signupSessionToken, err := server.validateRequestSignupSessionToken(r)
+	if errors.Is(err, errInvalidSignupSessionToken) {
+		server.setBlankSignupSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-up")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request signup token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request signup session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpVerifyEmailAddressPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	if signup.emailAddressVerified {
+	if signupSession.emailAddressVerified {
 		w.Header().Set("Location", "/sign-up/register-passkey")
 		w.WriteHeader(303)
 		return
@@ -1339,10 +1339,10 @@ func (server *serverStruct) signUpVerifyEmailAddressPageRoute(w http.ResponseWri
 	<button id="resend-verification-code-button" class="link-button">Resend verification code</button>
 	<button id="cancel-button" class="link-button">Cancel</button>
 </div>`
-	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(signup.emailAddress))
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(signupSession.emailAddress))
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("signup_token", signupToken)
+	pageDataJSONBuilder.AddString("signup_session_token", signupSessionToken)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, signUpVerifyEmailAddressPageScript, signUpVerifyEmailAddressPageStylesheet, pageDataJSON)
@@ -1357,42 +1357,42 @@ var signUpRegisterPasskeyScript string
 var signUpRegisterPasskeyStylesheet string
 
 func (server *serverStruct) signUpRegisterPasskeyPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	_, _, err := server.validateRequestSessionToken(r)
+	_, _, err := server.validateRequestAuthSessionToken(r)
 	if err == nil {
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
-	if !errors.Is(err, errInvalidSessionToken) {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+	if !errors.Is(err, errInvalidAuthSessionToken) {
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpRegisterPasskeyPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	signup, signupToken, err := server.validateRequestSignupToken(r)
-	if errors.Is(err, errInvalidSignupToken) {
-		server.setBlankSignupTokenCookie(w)
+	signupSession, signupSessionToken, err := server.validateRequestSignupSessionToken(r)
+	if errors.Is(err, errInvalidSignupSessionToken) {
+		server.setBlankSignupSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-up")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request signup token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request signup session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpRegisterPasskeyPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	if !signup.emailAddressVerified {
+	if !signupSession.emailAddressVerified {
 		w.Header().Set("Location", "/sign-up/verify-email-address")
 		w.WriteHeader(303)
 		return
 	}
 
-	if signup.passkeyWebauthnCredentialIdDefined {
+	if signupSession.passkeyWebauthnCredentialIdDefined {
 		w.Header().Set("Location", "/sign-up/register-passkey/set-passkey-name")
 		w.WriteHeader(303)
 		return
@@ -1408,9 +1408,9 @@ func (server *serverStruct) signUpRegisterPasskeyPageRoute(w http.ResponseWriter
 </div>`
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("signup_token", signupToken)
-	pageDataJSONBuilder.AddString("signup_target_user_id", signup.targetUserId)
-	pageDataJSONBuilder.AddString("signup_email_address", signup.emailAddress)
+	pageDataJSONBuilder.AddString("signup_session_token", signupSessionToken)
+	pageDataJSONBuilder.AddString("signup_target_user_id", signupSession.targetUserId)
+	pageDataJSONBuilder.AddString("signup_email_address", signupSession.emailAddress)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, signUpRegisterPasskeyScript, signUpRegisterPasskeyStylesheet, pageDataJSON)
@@ -1422,49 +1422,49 @@ func (server *serverStruct) signUpRegisterPasskeyPageRoute(w http.ResponseWriter
 var signUpRegisterPasskeySetPasskeyNameScript string
 
 func (server *serverStruct) signUpRegisterPasskeySetPasskeyNamePageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	_, _, err := server.validateRequestSessionToken(r)
+	_, _, err := server.validateRequestAuthSessionToken(r)
 	if err == nil {
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
-	if !errors.Is(err, errInvalidSessionToken) {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+	if !errors.Is(err, errInvalidAuthSessionToken) {
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpRegisterPasskeySetPasskeyNamePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	signup, signupToken, err := server.validateRequestSignupToken(r)
-	if errors.Is(err, errInvalidSignupToken) {
-		server.setBlankSignupTokenCookie(w)
+	signupSession, signupSessionToken, err := server.validateRequestSignupSessionToken(r)
+	if errors.Is(err, errInvalidSignupSessionToken) {
+		server.setBlankSignupSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-up")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request signup token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request signup session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeSignUpRegisterPasskeySetPasskeyNamePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	if !signup.emailAddressVerified {
+	if !signupSession.emailAddressVerified {
 		w.Header().Set("Location", "/sign-up/verify-email-address")
 		w.WriteHeader(303)
 		return
 	}
 
-	if !signup.passkeyWebauthnCredentialIdDefined {
+	if !signupSession.passkeyWebauthnCredentialIdDefined {
 		w.Header().Set("Location", "/sign-up/register-passkey")
 		w.WriteHeader(303)
 		return
 	}
 
 	passkeyNameSuggestion := ""
-	if authenticatorName, ok := server.getWebauthnAuthenticatorName(signup.passkeyWebauthnAuthenticatorId); ok {
+	if authenticatorName, ok := server.getWebauthnAuthenticatorName(signupSession.passkeyWebauthnAuthenticatorId); ok {
 		passkeyNameSuggestion = authenticatorName
 	}
 
@@ -1480,7 +1480,7 @@ func (server *serverStruct) signUpRegisterPasskeySetPasskeyNamePageRoute(w http.
 	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(passkeyNameSuggestion))
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("signup_token", signupToken)
+	pageDataJSONBuilder.AddString("signup_session_token", signupSessionToken)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, signUpRegisterPasskeySetPasskeyNameScript, "", pageDataJSON)
@@ -1495,21 +1495,21 @@ var signInPageScript string
 var signInPageStylesheet string
 
 func (server *serverStruct) signInPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	_, _, err := server.validateRequestSessionToken(r)
+	_, _, err := server.validateRequestAuthSessionToken(r)
 	if err == nil {
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
-	if !errors.Is(err, errInvalidSessionToken) {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+	if !errors.Is(err, errInvalidAuthSessionToken) {
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeSignInPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	passkeySignin, err := server.createPasskeySignin()
+	passkeySigninAttempt, err := server.createPasskeySigninAttempt()
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to create passkey signin: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeSignInPage, errorMessage)
@@ -1532,8 +1532,8 @@ func (server *serverStruct) signInPageRoute(w http.ResponseWriter, r *http.Reque
 </div>`
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("passkey_signin_id", passkeySignin.id)
-	pageDataJSONBuilder.AddString("passkey_signin_challenge", base64.StdEncoding.EncodeToString(passkeySignin.challenge))
+	pageDataJSONBuilder.AddString("passkey_signin_attempt_id", passkeySigninAttempt.id)
+	pageDataJSONBuilder.AddString("passkey_signin_webauthn_challenge", base64.StdEncoding.EncodeToString(passkeySigninAttempt.challenge))
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, signInPageScript, signInPageStylesheet, pageDataJSON)
@@ -1548,44 +1548,44 @@ var signInVerifyEmailCodePageScript string
 var signInVerifyEmailCodePageStylesheet string
 
 func (server *serverStruct) signInVerifyEmailCodePageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	_, _, err := server.validateRequestSessionToken(r)
+	_, _, err := server.validateRequestAuthSessionToken(r)
 	if err == nil {
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
-	if !errors.Is(err, errInvalidSessionToken) {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+	if !errors.Is(err, errInvalidAuthSessionToken) {
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeSignInVerifyEmailCodePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	emailCodeSignin, emailCodeSigninToken, err := server.validateRequestEmailCodeSigninToken(r)
-	if errors.Is(err, errInvalidEmailCodeSigninToken) {
-		server.setBlankEmailCodeSigninToken(w)
+	emailCodeSigninSession, emailCodeSigninSessionToken, err := server.validateRequestEmailCodeSigninSessionToken(r)
+	if errors.Is(err, errInvalidEmailCodeSigninSessionToken) {
+		server.setBlankEmailCodeSigninSessionToken(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request email code signin token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request email code signin session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeSignInVerifyEmailCodePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	userEmailAddress, err := server.getEmailCodeSigninUserEmailAddress(emailCodeSignin.id)
+	userEmailAddress, err := server.getEmailCodeSigninSessionUserEmailAddress(emailCodeSigninSession.id)
 	if errors.Is(err, errItemNotFound) {
-		server.setBlankEmailCodeSigninToken(w)
+		server.setBlankEmailCodeSigninSessionToken(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to get email code signin user email address: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to get email code signin session user email address: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeSignInVerifyEmailCodePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
@@ -1609,7 +1609,7 @@ func (server *serverStruct) signInVerifyEmailCodePageRoute(w http.ResponseWriter
 	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(userEmailAddress))
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("email_code_signin_token", emailCodeSigninToken)
+	pageDataJSONBuilder.AddString("email_code_signin_session_token", emailCodeSigninSessionToken)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, signInVerifyEmailCodePageScript, signInVerifyEmailCodePageStylesheet, pageDataJSON)
@@ -1624,44 +1624,44 @@ var verifyIdentityPageScript string
 var verifyIdentityPageStylesheet string
 
 func (server *serverStruct) verifyIdentityPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	session, sessionToken, err := server.validateRequestSessionToken(r)
-	if errors.Is(err, errInvalidSessionToken) {
-		server.setBlankSessionTokenCookie(w)
+	authSession, authSessionToken, err := server.validateRequestAuthSessionToken(r)
+	if errors.Is(err, errInvalidAuthSessionToken) {
+		server.setBlankAuthSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	identityVerification, identityVerificationToken, err := server.validateRequestIdentityVerificationToken(r)
-	if errors.Is(err, errInvalidIdentityVerificationToken) {
-		server.setBlankIdentityVerificationTokenCookie(w)
+	identityVerificationSession, identityVerificationSessionToken, err := server.validateRequestIdentityVerificationSessionToken(r)
+	if errors.Is(err, errInvalidIdentityVerificationSessionToken) {
+		server.setBlankIdentityVerificationSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request identity verification token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request identity verification session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	if identityVerification.sessionId != session.id {
-		server.setBlankIdentityVerificationTokenCookie(w)
+	if identityVerificationSession.authSessionId != authSession.id {
+		server.setBlankIdentityVerificationSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
 
-	passkeyCount, err := server.getUserPasskeyCount(session.userId)
+	passkeyCount, err := server.getUserPasskeyCount(authSession.userId)
 	if err != nil {
 		errorMessage := fmt.Sprintf("failed to get user passkeys: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityPage, errorMessage)
@@ -1691,9 +1691,9 @@ func (server *serverStruct) verifyIdentityPageRoute(w http.ResponseWriter, r *ht
 	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, controlsHTML)
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("session_token", sessionToken)
-	pageDataJSONBuilder.AddString("identity_verification_token", identityVerificationToken)
-	pageDataJSONBuilder.AddString("identity_verification_passkey_verification_challenge", base64.StdEncoding.EncodeToString(identityVerification.passkeyVerificationChallenge))
+	pageDataJSONBuilder.AddString("auth_session_token", authSessionToken)
+	pageDataJSONBuilder.AddString("identity_verification_session_token", identityVerificationSessionToken)
+	pageDataJSONBuilder.AddString("identity_verification_passkey_verification_challenge", base64.StdEncoding.EncodeToString(identityVerificationSession.passkeyVerificationChallenge))
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, verifyIdentityPageScript, verifyIdentityPageStylesheet, pageDataJSON)
@@ -1708,58 +1708,58 @@ var verifyIdentityVerifyEmailCodePageScript string
 var verifyIdentityVerifyEmailCodePageStylesheet string
 
 func (server *serverStruct) verifyIdentityVerifyEmailCodePageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	session, sessionToken, err := server.validateRequestSessionToken(r)
-	if errors.Is(err, errInvalidSessionToken) {
-		server.setBlankSessionTokenCookie(w)
+	authSession, authSessionToken, err := server.validateRequestAuthSessionToken(r)
+	if errors.Is(err, errInvalidAuthSessionToken) {
+		server.setBlankAuthSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityVerifyEmailCodePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	identityVerification, identityVerificationToken, err := server.validateRequestIdentityVerificationToken(r)
-	if errors.Is(err, errInvalidIdentityVerificationToken) {
-		server.setBlankIdentityVerificationTokenCookie(w)
+	identityVerificationSession, identityVerificationSessionToken, err := server.validateRequestIdentityVerificationSessionToken(r)
+	if errors.Is(err, errInvalidIdentityVerificationSessionToken) {
+		server.setBlankIdentityVerificationSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request identity verification token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request identity verification session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityVerifyEmailCodePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	if identityVerification.sessionId != session.id {
-		server.setBlankIdentityVerificationTokenCookie(w)
+	if identityVerificationSession.authSessionId != authSession.id {
+		server.setBlankIdentityVerificationSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
 
-	if !identityVerification.emailCodeDefined {
+	if !identityVerificationSession.emailCodeDefined {
 		w.Header().Set("Location", "/verify-identity")
 		w.WriteHeader(303)
 		return
 	}
 
-	userEmailAddress, err := server.getIdentityVerificationUserEmailAddress(identityVerification.id)
+	userEmailAddress, err := server.getIdentityVerificationSessionUserEmailAddress(identityVerificationSession.id)
 	if errors.Is(err, errItemNotFound) {
-		server.setBlankIdentityVerificationTokenCookie(w)
+		server.setBlankIdentityVerificationSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to get identity verification user email address: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to get identity verification session user email address: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityVerifyEmailCodePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
@@ -1783,8 +1783,8 @@ func (server *serverStruct) verifyIdentityVerifyEmailCodePageRoute(w http.Respon
 	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(userEmailAddress))
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("session_token", sessionToken)
-	pageDataJSONBuilder.AddString("identity_verification_token", identityVerificationToken)
+	pageDataJSONBuilder.AddString("auth_session_token", authSessionToken)
+	pageDataJSONBuilder.AddString("identity_verification_session_token", identityVerificationSessionToken)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, verifyIdentityVerifyEmailCodePageScript, verifyIdentityVerifyEmailCodePageStylesheet, pageDataJSON)
@@ -1799,49 +1799,49 @@ var updateEmailAddressSetNewEmailAddressPageScript string
 var updateEmailAddressSetNewEmailAddressPageStylesheet string
 
 func (server *serverStruct) updateEmailAddressSetNewEmailAddressPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	session, sessionToken, err := server.validateRequestSessionToken(r)
-	if errors.Is(err, errInvalidSessionToken) {
-		server.setBlankSessionTokenCookie(w)
+	authSession, authSessionToken, err := server.validateRequestAuthSessionToken(r)
+	if errors.Is(err, errInvalidAuthSessionToken) {
+		server.setBlankAuthSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeUpdateEmailAddressSetNewEmailAddressPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	emailAddressUpdate, emailAddressUpdateToken, err := server.validateRequestEmailAddressUpdateToken(r)
-	if errors.Is(err, errInvalidEmailAddressUpdateToken) {
-		server.setBlankEmailAddressUpdateTokenCookie(w)
+	emailAddressUpdateSession, emailAddressUpdateSessionToken, err := server.validateRequestEmailAddressUpdateSessionToken(r)
+	if errors.Is(err, errInvalidEmailAddressUpdateSessionToken) {
+		server.setBlankEmailAddressUpdateSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request email address update token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request email address update session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeUpdateEmailAddressSetNewEmailAddressPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	if emailAddressUpdate.sessionId != session.id {
-		server.setBlankEmailAddressUpdateTokenCookie(w)
+	if emailAddressUpdateSession.authSessionId != authSession.id {
+		server.setBlankEmailAddressUpdateSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
-	if !emailAddressUpdate.identityVerified {
+	if !emailAddressUpdateSession.identityVerified {
 		w.Header().Set("Location", "/verify-identity")
 		w.WriteHeader(303)
 		return
 	}
 
-	if emailAddressUpdate.newEmailAddressDefined {
+	if emailAddressUpdateSession.newEmailAddressDefined {
 		w.Header().Set("Location", "/update-email-address/verify-new-email-address")
 		w.WriteHeader(303)
 		return
@@ -1858,8 +1858,8 @@ func (server *serverStruct) updateEmailAddressSetNewEmailAddressPageRoute(w http
 <button id="cancel-button" class="link-button">Cancel</button>`
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("session_token", sessionToken)
-	pageDataJSONBuilder.AddString("email_address_update_token", emailAddressUpdateToken)
+	pageDataJSONBuilder.AddString("auth_session_token", authSessionToken)
+	pageDataJSONBuilder.AddString("email_address_update_session_token", emailAddressUpdateSessionToken)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, updateEmailAddressSetNewEmailAddressPageScript, updateEmailAddressSetNewEmailAddressPageStylesheet, pageDataJSON)
@@ -1874,59 +1874,59 @@ var updateEmailAddressVerifyNewEmailAddressPageScript string
 var updateEmailAddressVerifyNewEmailAddressPageStylesheet string
 
 func (server *serverStruct) updateEmailAddressVerifyNewEmailAddressPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	session, sessionToken, err := server.validateRequestSessionToken(r)
-	if errors.Is(err, errInvalidSessionToken) {
-		server.setBlankSessionTokenCookie(w)
+	authSession, authSessionToken, err := server.validateRequestAuthSessionToken(r)
+	if errors.Is(err, errInvalidAuthSessionToken) {
+		server.setBlankAuthSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeUpdateEmailAddressVerifyNewEmailAddressPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	emailAddressUpdate, emailAddressUpdateToken, err := server.validateRequestEmailAddressUpdateToken(r)
-	if errors.Is(err, errInvalidEmailAddressUpdateToken) {
-		server.setBlankEmailAddressUpdateTokenCookie(w)
+	emailAddressUpdateSession, emailAddressUpdateSessionToken, err := server.validateRequestEmailAddressUpdateSessionToken(r)
+	if errors.Is(err, errInvalidEmailAddressUpdateSessionToken) {
+		server.setBlankEmailAddressUpdateSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request email address update token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request email address update session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeUpdateEmailAddressVerifyNewEmailAddressPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	if emailAddressUpdate.sessionId != session.id {
-		server.setBlankEmailAddressUpdateTokenCookie(w)
+	if emailAddressUpdateSession.authSessionId != authSession.id {
+		server.setBlankEmailAddressUpdateSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
-	if !emailAddressUpdate.identityVerified {
+	if !emailAddressUpdateSession.identityVerified {
 		w.Header().Set("Location", "/verify-identity")
 		w.WriteHeader(303)
 		return
 	}
 
-	if !emailAddressUpdate.newEmailAddressDefined {
+	if !emailAddressUpdateSession.newEmailAddressDefined {
 		w.Header().Set("Location", "/update-email-address")
 		w.WriteHeader(303)
 		return
 	}
 
-	if !emailAddressUpdate.newEmailAddressVerificationCodeDefined {
+	if !emailAddressUpdateSession.newEmailAddressVerificationCodeDefined {
 		errorMessage := "new email address verification code not defined"
 		server.logRouteInternalError(requestId, clientIPAddress, routeUpdateEmailAddressVerifyNewEmailAddressPage, errorMessage)
 
-		server.setBlankEmailAddressUpdateTokenCookie(w)
+		server.setBlankEmailAddressUpdateSessionTokenCookie(w)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
@@ -1945,11 +1945,11 @@ func (server *serverStruct) updateEmailAddressVerifyNewEmailAddressPageRoute(w h
 	<button id="resend-verification-code-button" class="link-button">Resend verification code</button>
 	<button id="cancel-button" class="link-button">Cancel</button>
 </div>`
-	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(emailAddressUpdate.newEmailAddress))
+	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(emailAddressUpdateSession.newEmailAddress))
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("session_token", sessionToken)
-	pageDataJSONBuilder.AddString("email_address_update_token", emailAddressUpdateToken)
+	pageDataJSONBuilder.AddString("auth_session_token", authSessionToken)
+	pageDataJSONBuilder.AddString("email_address_update_session_token", emailAddressUpdateSessionToken)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, updateEmailAddressVerifyNewEmailAddressPageScript, updateEmailAddressVerifyNewEmailAddressPageStylesheet, pageDataJSON)
@@ -1964,76 +1964,76 @@ var registerPasskeyCreatePasskeyPageScript string
 var registerPasskeyCreatePasskeyPageStylesheet string
 
 func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	session, sessionToken, err := server.validateRequestSessionToken(r)
-	if errors.Is(err, errInvalidSessionToken) {
-		server.setBlankSessionTokenCookie(w)
+	authSession, authSessionToken, err := server.validateRequestAuthSessionToken(r)
+	if errors.Is(err, errInvalidAuthSessionToken) {
+		server.setBlankAuthSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	passkeyRegistration, passkeyRegistrationToken, err := server.validateRequestPasskeyRegistrationToken(r)
-	if errors.Is(err, errInvalidPasskeyRegistrationToken) {
-		server.setBlankPasskeyRegistrationTokenCookie(w)
+	passkeyRegistrationSession, passkeyRegistrationSessionToken, err := server.validateRequestPasskeyRegistrationSessionToken(r)
+	if errors.Is(err, errInvalidPasskeyRegistrationSessionToken) {
+		server.setBlankPasskeyRegistrationSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request passkey registration token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request passkey registration session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	if passkeyRegistration.sessionId != session.id {
-		server.setBlankPasskeyRegistrationTokenCookie(w)
+	if passkeyRegistrationSession.authSessionId != authSession.id {
+		server.setBlankPasskeyRegistrationSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
-	if !passkeyRegistration.identityVerified {
+	if !passkeyRegistrationSession.identityVerified {
 		w.Header().Set("Location", "/verify-identity")
 		w.WriteHeader(303)
 		return
 	}
 
-	if passkeyRegistration.passkeyWebauthnCredentialIdDefined {
+	if passkeyRegistrationSession.passkeyWebauthnCredentialIdDefined {
 		w.Header().Set("Location", "/register-passkey/set-passkey-name")
 		w.WriteHeader(303)
 		return
 	}
-	if passkeyRegistration.passkeyCOSEPublicKeyDefined {
-		errorMessage := "passkey registration passkey cose public key defined"
+	if passkeyRegistrationSession.passkeyCOSEPublicKeyDefined {
+		errorMessage := "passkey registration session passkey cose public key defined"
 		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
 
-		server.setBlankPasskeyRegistrationTokenCookie(w)
+		server.setBlankPasskeyRegistrationSessionTokenCookie(w)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
-	if passkeyRegistration.passkeyWebauthnAuthenticatorIdDefined {
-		errorMessage := "passkey registration passkey webauthn authenticator id defined"
+	if passkeyRegistrationSession.passkeyWebauthnAuthenticatorIdDefined {
+		errorMessage := "passkey registration session passkey webauthn authenticator id defined"
 		server.logRouteInternalError(requestId, clientIPAddress, routeDeleteAccountConfirmPage, errorMessage)
 
-		server.setBlankPasskeyRegistrationTokenCookie(w)
+		server.setBlankPasskeyRegistrationSessionTokenCookie(w)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	user, err := server.getUser(session.userId)
+	user, err := server.getUser(authSession.userId)
 	if errors.Is(err, errItemNotFound) {
-		server.setBlankSessionTokenCookie(w)
-		server.setBlankPasskeyRegistrationTokenCookie(w)
+		server.setBlankAuthSessionTokenCookie(w)
+		server.setBlankPasskeyRegistrationSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
@@ -2054,8 +2054,8 @@ func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.Respons
 <button id="cancel-button" class="link-button">Cancel</button>`
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("session_token", sessionToken)
-	pageDataJSONBuilder.AddString("passkey_registration_token", passkeyRegistrationToken)
+	pageDataJSONBuilder.AddString("auth_session_token", authSessionToken)
+	pageDataJSONBuilder.AddString("passkey_registration_session_token", passkeyRegistrationSessionToken)
 	pageDataJSONBuilder.AddString("user_id", user.id)
 	pageDataJSONBuilder.AddString("user_email_address", user.emailAddress)
 	pageDataJSON := pageDataJSONBuilder.Done()
@@ -2069,74 +2069,74 @@ func (server *serverStruct) registerPasskeyCreatePasskeyPageRoute(w http.Respons
 var registerPasskeySetPasskeyNamePageScript string
 
 func (server *serverStruct) registerPasskeySetPasskeyNamePageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	session, sessionToken, err := server.validateRequestSessionToken(r)
-	if errors.Is(err, errInvalidSessionToken) {
-		server.setBlankSessionTokenCookie(w)
+	authSession, authSessionToken, err := server.validateRequestAuthSessionToken(r)
+	if errors.Is(err, errInvalidAuthSessionToken) {
+		server.setBlankAuthSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeyCreatePasskeyPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	passkeyRegistration, passkeyRegistrationToken, err := server.validateRequestPasskeyRegistrationToken(r)
-	if errors.Is(err, errInvalidPasskeyRegistrationToken) {
-		server.setBlankPasskeyRegistrationTokenCookie(w)
+	passkeyRegistrationSession, passkeyRegistrationSessionToken, err := server.validateRequestPasskeyRegistrationSessionToken(r)
+	if errors.Is(err, errInvalidPasskeyRegistrationSessionToken) {
+		server.setBlankPasskeyRegistrationSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request passkey registration token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request passkey registration session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeyCreatePasskeyPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	if passkeyRegistration.sessionId != session.id {
-		server.setBlankPasskeyRegistrationTokenCookie(w)
+	if passkeyRegistrationSession.authSessionId != authSession.id {
+		server.setBlankPasskeyRegistrationSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
-	if !passkeyRegistration.identityVerified {
+	if !passkeyRegistrationSession.identityVerified {
 		w.Header().Set("Location", "/verify-identity")
 		w.WriteHeader(303)
 		return
 	}
 
-	if !passkeyRegistration.passkeyWebauthnCredentialIdDefined {
+	if !passkeyRegistrationSession.passkeyWebauthnCredentialIdDefined {
 		w.Header().Set("Location", "/register-passkey/create-passkey")
 		w.WriteHeader(303)
 		return
 	}
-	if !passkeyRegistration.passkeyCOSEPublicKeyDefined {
-		errorMessage := "passkey registration passkey cose public key not defined"
+	if !passkeyRegistrationSession.passkeyCOSEPublicKeyDefined {
+		errorMessage := "passkey registration session passkey cose public key not defined"
 		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeyCreatePasskeyPage, errorMessage)
 
-		server.setBlankPasskeyRegistrationTokenCookie(w)
+		server.setBlankPasskeyRegistrationSessionTokenCookie(w)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
-	if !passkeyRegistration.passkeyWebauthnAuthenticatorIdDefined {
-		errorMessage := "passkey registration passkey webauthn authenticator id not defined"
+	if !passkeyRegistrationSession.passkeyWebauthnAuthenticatorIdDefined {
+		errorMessage := "passkey registration session passkey webauthn authenticator id not defined"
 		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeyCreatePasskeyPage, errorMessage)
 
-		server.setBlankPasskeyRegistrationTokenCookie(w)
+		server.setBlankPasskeyRegistrationSessionTokenCookie(w)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
 	passkeyNameSuggestion := ""
-	if authenticatorName, ok := server.getWebauthnAuthenticatorName(passkeyRegistration.passkeyWebauthnAuthenticatorId); ok {
+	if authenticatorName, ok := server.getWebauthnAuthenticatorName(passkeyRegistrationSession.passkeyWebauthnAuthenticatorId); ok {
 		passkeyNameSuggestion = authenticatorName
 	}
 
@@ -2152,8 +2152,8 @@ func (server *serverStruct) registerPasskeySetPasskeyNamePageRoute(w http.Respon
 	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(passkeyNameSuggestion))
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("session_token", sessionToken)
-	pageDataJSONBuilder.AddString("passkey_registration_token", passkeyRegistrationToken)
+	pageDataJSONBuilder.AddString("auth_session_token", authSessionToken)
+	pageDataJSONBuilder.AddString("passkey_registration_session_token", passkeyRegistrationSessionToken)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, registerPasskeySetPasskeyNamePageScript, "", pageDataJSON)
@@ -2168,51 +2168,51 @@ var deletePasskeyConfirmPageScript string
 var deletePasskeyConfirmPageStylesheet string
 
 func (server *serverStruct) deletePasskeyConfirmPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	session, sessionToken, err := server.validateRequestSessionToken(r)
-	if errors.Is(err, errInvalidSessionToken) {
-		server.setBlankSessionTokenCookie(w)
+	authSession, authSessionToken, err := server.validateRequestAuthSessionToken(r)
+	if errors.Is(err, errInvalidAuthSessionToken) {
+		server.setBlankAuthSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeySetPasskeyNamePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	passkeyDeletion, passkeyDeletionToken, err := server.validateRequestPasskeyDeletionToken(r)
-	if errors.Is(err, errInvalidPasskeyDeletionToken) {
-		server.setBlankPasskeyDeletionTokenCookie(w)
+	passkeyDeletionSession, passkeyDeletionSessionToken, err := server.validateRequestPasskeyDeletionSessionToken(r)
+	if errors.Is(err, errInvalidPasskeyDeletionSessionToken) {
+		server.setBlankPasskeyDeletionSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request passkey deletion token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request passkey deletion session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeRegisterPasskeySetPasskeyNamePage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	if passkeyDeletion.sessionId != session.id {
-		server.setBlankPasskeyDeletionTokenCookie(w)
+	if passkeyDeletionSession.authSessionId != authSession.id {
+		server.setBlankPasskeyDeletionSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
-	if !passkeyDeletion.identityVerified {
+	if !passkeyDeletionSession.identityVerified {
 		w.Header().Set("Location", "/verify-identity")
 		w.WriteHeader(303)
 		return
 	}
 
-	passkey, err := server.getPasskey(passkeyDeletion.passkeyId)
+	passkey, err := server.getPasskey(passkeyDeletionSession.passkeyId)
 	if errors.Is(err, errItemNotFound) {
-		server.setBlankPasskeyRegistrationTokenCookie(w)
+		server.setBlankPasskeyRegistrationSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
@@ -2237,8 +2237,8 @@ func (server *serverStruct) deletePasskeyConfirmPageRoute(w http.ResponseWriter,
 	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(passkey.name))
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("session_token", sessionToken)
-	pageDataJSONBuilder.AddString("passkey_deletion_token", passkeyDeletionToken)
+	pageDataJSONBuilder.AddString("auth_session_token", authSessionToken)
+	pageDataJSONBuilder.AddString("passkey_deletion_session_token", passkeyDeletionSessionToken)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, deletePasskeyConfirmPageScript, deletePasskeyConfirmPageStylesheet, pageDataJSON)
@@ -2253,43 +2253,43 @@ var deleteAccountConfirmPageScript string
 var deleteAccountConfirmPageStylesheet string
 
 func (server *serverStruct) deleteAccountConfirmPageRoute(w http.ResponseWriter, r *http.Request, requestId string, clientIPAddress string) {
-	session, sessionToken, err := server.validateRequestSessionToken(r)
-	if errors.Is(err, errInvalidSessionToken) {
-		server.setBlankSessionTokenCookie(w)
+	authSession, authSessionToken, err := server.validateRequestAuthSessionToken(r)
+	if errors.Is(err, errInvalidAuthSessionToken) {
+		server.setBlankAuthSessionTokenCookie(w)
 		w.Header().Set("Location", "/sign-in")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request session token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request auth session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeDeletePasskeyConfirmPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	accountDeletion, accountDeletionToken, err := server.validateRequestAccountDeletionToken(r)
-	if errors.Is(err, errInvalidAccountDeletionToken) {
-		server.setBlankAccountDeletionTokenCookie(w)
+	accountDeletionSession, accountDeletionSessionToken, err := server.validateRequestAccountDeletionSessionToken(r)
+	if errors.Is(err, errInvalidAccountDeletionSessionToken) {
+		server.setBlankAccountDeletionSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
 	if err != nil {
-		errorMessage := fmt.Sprintf("failed to validate request account deletion token: %s", err.Error())
+		errorMessage := fmt.Sprintf("failed to validate request account deletion session token: %s", err.Error())
 		server.logRouteInternalError(requestId, clientIPAddress, routeDeletePasskeyConfirmPage, errorMessage)
 		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
 		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
-	if accountDeletion.sessionId != session.id {
-		server.setBlankAccountDeletionTokenCookie(w)
+	if accountDeletionSession.authSessionId != authSession.id {
+		server.setBlankAccountDeletionSessionTokenCookie(w)
 		w.Header().Set("Location", "/account")
 		w.WriteHeader(303)
 		return
 	}
-	if !accountDeletion.identityVerified {
+	if !accountDeletionSession.identityVerified {
 		w.Header().Set("Location", "/verify-identity")
 		w.WriteHeader(303)
 		return
@@ -2305,8 +2305,8 @@ func (server *serverStruct) deleteAccountConfirmPageRoute(w http.ResponseWriter,
 </div>`
 
 	pageDataJSONBuilder := json.NewObjectBuilder(htmlSafeJSONStringCharacterEscapingBehavior)
-	pageDataJSONBuilder.AddString("session_token", sessionToken)
-	pageDataJSONBuilder.AddString("account_deletion_token", accountDeletionToken)
+	pageDataJSONBuilder.AddString("auth_session_token", authSessionToken)
+	pageDataJSONBuilder.AddString("account_deletion_session_token", accountDeletionSessionToken)
 	pageDataJSON := pageDataJSONBuilder.Done()
 
 	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, deleteAccountConfirmPageScript, deleteAccountConfirmPageStylesheet, pageDataJSON)

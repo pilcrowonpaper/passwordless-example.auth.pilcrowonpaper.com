@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com/webauthn"
@@ -14,69 +12,69 @@ import (
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-type accountDeletionStruct struct {
+type accountDeletionSessionStruct struct {
 	id               string
-	sessionId        string
+	authSessionId    string
 	secretHash       []byte
 	identityVerified bool
 	createdAt        time.Time
 }
 
-func (accountDeletion *accountDeletionStruct) compareSecretAgainstHash(secret []byte) bool {
+func (accountDeletionSession *accountDeletionSessionStruct) compareSecretAgainstHash(secret []byte) bool {
 	hashed := hashSessionSecret(secret)
-	hashEqual := constantTimeCompare(hashed, accountDeletion.secretHash)
+	hashEqual := constantTimeCompare(hashed, accountDeletionSession.secretHash)
 	return hashEqual
 }
 
-func (server *serverStruct) createAccountDeletion(sessionId string) (accountDeletionStruct, []byte, identityVerificationStruct, []byte, error) {
+func (server *serverStruct) createAccountDeletionSession(authSessionId string) (accountDeletionSessionStruct, []byte, identityVerificationSessionStruct, []byte, error) {
 	nowSecondPrecision := getCurrentTimeSecondPrecision()
 
-	accountDeletionId := generateItemId()
-	accountDeletionSecret := generateSessionSecret()
-	accountDeletionSecretHash := hashSessionSecret(accountDeletionSecret)
+	accountDeletionSessionId := generateItemId()
+	accountDeletionSessionSecret := generateSessionSecret()
+	accountDeletionSessionSecretHash := hashSessionSecret(accountDeletionSessionSecret)
 
-	accountDeletion := accountDeletionStruct{
-		id:         accountDeletionId,
-		sessionId:  sessionId,
-		secretHash: accountDeletionSecretHash,
-		createdAt:  nowSecondPrecision,
+	accountDeletionSession := accountDeletionSessionStruct{
+		id:            accountDeletionSessionId,
+		authSessionId: authSessionId,
+		secretHash:    accountDeletionSessionSecretHash,
+		createdAt:     nowSecondPrecision,
 	}
 
-	identityVerificationId := generateItemId()
-	identityVerificationSecret := generateSessionSecret()
-	identityVerificationSecretHash := hashSessionSecret(identityVerificationSecret)
-	identityVerificationPasskeyVerificationChallenge := webauthn.GenerateChallenge()
+	identityVerificationSessionId := generateItemId()
+	identityVerificationSessionSecret := generateSessionSecret()
+	identityVerificationSessionSecretHash := hashSessionSecret(identityVerificationSessionSecret)
+	identityVerificationSessionPasskeyVerificationChallenge := webauthn.GenerateChallenge()
 
-	identityVerification := identityVerificationStruct{
-		id:                           identityVerificationId,
-		sessionId:                    sessionId,
-		secretHash:                   identityVerificationSecretHash,
-		verifyingAction:              identityVerificationVerifyingActionAccountDeletion,
-		verifyingActionId:            accountDeletion.id,
-		passkeyVerificationChallenge: identityVerificationPasskeyVerificationChallenge,
+	identityVerificationSession := identityVerificationSessionStruct{
+		id:                           identityVerificationSessionId,
+		authSessionId:                authSessionId,
+		secretHash:                   identityVerificationSessionSecretHash,
+		verifyingAction:              identityVerificationSessionVerifyingActionAccountDeletion,
+		verifyingActionId:            accountDeletionSession.id,
+		passkeyVerificationChallenge: identityVerificationSessionPasskeyVerificationChallenge,
 		createdAt:                    nowSecondPrecision,
 	}
 
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
-		return accountDeletionStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to take database write connection: %s", err.Error())
+		return accountDeletionSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(databaseWriteConnection, "BEGIN IMMEDIATE", nil)
 	if err != nil {
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		return accountDeletionStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to begin transaction: %s", err.Error())
+		return accountDeletionSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to begin transaction: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(
 		databaseWriteConnection,
-		"INSERT INTO account_deletion (id, session_id, secret_hash, created_at) VALUES (?, ?, ?, ?)",
+		"INSERT INTO account_deletion_session (id, auth_session_id, secret_hash, created_at) VALUES (?, ?, ?, ?)",
 		&sqlitex.ExecOptions{
 			Args: []any{
-				accountDeletion.id,
-				accountDeletion.sessionId,
-				accountDeletion.secretHash,
-				accountDeletion.createdAt.Unix(),
+				accountDeletionSession.id,
+				accountDeletionSession.authSessionId,
+				accountDeletionSession.secretHash,
+				accountDeletionSession.createdAt.Unix(),
 			},
 		},
 	)
@@ -84,24 +82,24 @@ func (server *serverStruct) createAccountDeletion(sessionId string) (accountDele
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 		if rollbackErr != nil {
-			return accountDeletionStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+			return accountDeletionSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
 
-		return accountDeletionStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to insert into account_deletion table: %s", err.Error())
+		return accountDeletionSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to insert into account_deletion_session table: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(
 		databaseWriteConnection,
-		"INSERT INTO identity_verification (id, session_id, secret_hash, verifying_action, verifying_action_id, passkey_verification_challenge, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO identity_verification_session (id, auth_session_id, secret_hash, verifying_action, verifying_action_id, passkey_verification_challenge, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		&sqlitex.ExecOptions{
 			Args: []any{
-				identityVerification.id,
-				identityVerification.sessionId,
-				identityVerification.secretHash,
-				identityVerification.verifyingAction,
-				identityVerification.verifyingActionId,
-				identityVerification.passkeyVerificationChallenge,
-				identityVerification.createdAt.Unix(),
+				identityVerificationSession.id,
+				identityVerificationSession.authSessionId,
+				identityVerificationSession.secretHash,
+				identityVerificationSession.verifyingAction,
+				identityVerificationSession.verifyingActionId,
+				identityVerificationSession.passkeyVerificationChallenge,
+				identityVerificationSession.createdAt.Unix(),
 			},
 		},
 	)
@@ -109,10 +107,10 @@ func (server *serverStruct) createAccountDeletion(sessionId string) (accountDele
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 		if rollbackErr != nil {
-			return accountDeletionStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+			return accountDeletionSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
 
-		return accountDeletionStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to insert into identity_verification table: %s", err.Error())
+		return accountDeletionSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to insert into identity_verification_session table: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(databaseWriteConnection, "COMMIT", nil)
@@ -120,30 +118,30 @@ func (server *serverStruct) createAccountDeletion(sessionId string) (accountDele
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 		if rollbackErr != nil {
-			return accountDeletionStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+			return accountDeletionSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
-		return accountDeletionStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to commit transaction: %s", err.Error())
+		return accountDeletionSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to commit transaction: %s", err.Error())
 	}
 
 	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 
-	return accountDeletion, accountDeletionSecret, identityVerification, identityVerificationSecret, nil
+	return accountDeletionSession, accountDeletionSessionSecret, identityVerificationSession, identityVerificationSessionSecret, nil
 }
 
-func (server *serverStruct) getAccountDeletion(accountDeletionId string) (accountDeletionStruct, error) {
-	accountDeletions := []accountDeletionStruct{}
+func (server *serverStruct) getAccountDeletionSession(accountDeletionSessionId string) (accountDeletionSessionStruct, error) {
+	accountDeletionSessions := []accountDeletionSessionStruct{}
 
 	databaseReadConnection, err := server.databaseReadConnectionPool.Take(context.Background())
 	if err != nil {
-		return accountDeletionStruct{}, fmt.Errorf("failed to take database read connection: %s", err.Error())
+		return accountDeletionSessionStruct{}, fmt.Errorf("failed to take database read connection: %s", err.Error())
 	}
 	err = sqlitex.Execute(
 		databaseReadConnection,
-		"SELECT session_id, secret_hash, identity_verified, created_at FROM account_deletion WHERE id = ?",
+		"SELECT auth_session_id, secret_hash, identity_verified, created_at FROM account_deletion_session WHERE id = ?",
 		&sqlitex.ExecOptions{
-			Args: []any{accountDeletionId},
+			Args: []any{accountDeletionSessionId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
-				sessionId := stmt.ColumnText(0)
+				authSessionId := stmt.ColumnText(0)
 
 				secretHash := make([]byte, stmt.ColumnLen(1))
 				stmt.ColumnBytes(1, secretHash)
@@ -152,175 +150,102 @@ func (server *serverStruct) getAccountDeletion(accountDeletionId string) (accoun
 
 				createdAt := time.Unix(stmt.ColumnInt64(3), 0)
 
-				accountDeletion := accountDeletionStruct{
-					id:               accountDeletionId,
+				accountDeletionSession := accountDeletionSessionStruct{
+					id:               accountDeletionSessionId,
 					secretHash:       secretHash,
-					sessionId:        sessionId,
+					authSessionId:    authSessionId,
 					identityVerified: identityVerified,
 					createdAt:        createdAt,
 				}
 
-				accountDeletions = append(accountDeletions, accountDeletion)
+				accountDeletionSessions = append(accountDeletionSessions, accountDeletionSession)
 				return nil
 			},
 		},
 	)
 	server.databaseReadConnectionPool.Put(databaseReadConnection)
 	if err != nil {
-		return accountDeletionStruct{}, fmt.Errorf("failed to select from account_deletion table: %s", err.Error())
+		return accountDeletionSessionStruct{}, fmt.Errorf("failed to select from account_deletion_session table: %s", err.Error())
 	}
 
-	if len(accountDeletions) < 1 {
-		return accountDeletionStruct{}, errItemNotFound
+	if len(accountDeletionSessions) < 1 {
+		return accountDeletionSessionStruct{}, errItemNotFound
 	}
 
-	accountDeletion := accountDeletions[0]
+	accountDeletionSession := accountDeletionSessions[0]
 
-	if time.Since(accountDeletion.createdAt) >= time.Hour {
-		return accountDeletionStruct{}, errItemNotFound
+	if time.Since(accountDeletionSession.createdAt) >= time.Hour {
+		return accountDeletionSessionStruct{}, errItemNotFound
 	}
 
-	return accountDeletion, nil
+	return accountDeletionSession, nil
 }
 
-const accountDeletionTokenCookieName = "account_deletion_token"
+var errInvalidAccountDeletionSessionToken = errors.New("invalid account deletion session token")
 
-func (server *serverStruct) setBlankAccountDeletionTokenCookie(w http.ResponseWriter) {
-	cookie := &http.Cookie{
-		Name:     accountDeletionTokenCookieName,
-		Value:    "",
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   -1,
-		Path:     "/",
-		Secure:   server.https(),
-	}
-	http.SetCookie(w, cookie)
-}
-
-var errInvalidAccountDeletionToken = errors.New("invalid account deletion token")
-
-func (server *serverStruct) validateAccountDeletionToken(accountDeletionToken string) (accountDeletionStruct, error) {
-	accountDeletionTokenParts := strings.Split(accountDeletionToken, ".")
-	if len(accountDeletionTokenParts) != 2 {
-		return accountDeletionStruct{}, errInvalidAccountDeletionToken
-	}
-	accountDeletionId := accountDeletionTokenParts[0]
-	encodedAccountDeletionSecret := accountDeletionTokenParts[1]
-	accountDeletionSecret, err := base64.StdEncoding.DecodeString(encodedAccountDeletionSecret)
+func (server *serverStruct) validateAccountDeletionSessionToken(accountDeletionSessionToken string) (accountDeletionSessionStruct, error) {
+	accountDeletionSessionId, accountDeletionSessionSecret, err := parseSessionToken(accountDeletionSessionToken)
 	if err != nil {
-		return accountDeletionStruct{}, errInvalidAccountDeletionToken
+		return accountDeletionSessionStruct{}, errInvalidAccountDeletionSessionToken
 	}
 
-	accountDeletion, err := server.getAccountDeletion(accountDeletionId)
+	accountDeletionSession, err := server.getAccountDeletionSession(accountDeletionSessionId)
 	if errors.Is(err, errItemNotFound) {
-		return accountDeletionStruct{}, errInvalidAccountDeletionToken
+		return accountDeletionSessionStruct{}, errInvalidAccountDeletionSessionToken
 	}
 	if err != nil {
-		return accountDeletionStruct{}, fmt.Errorf("failed to get account deletion: %s", err.Error())
+		return accountDeletionSessionStruct{}, fmt.Errorf("failed to validate account deletion session: %s", err.Error())
 	}
 
-	accountDeletionSecretValid := accountDeletion.compareSecretAgainstHash(accountDeletionSecret)
-	if !accountDeletionSecretValid {
-		return accountDeletionStruct{}, errInvalidAccountDeletionToken
+	secretValid := accountDeletionSession.compareSecretAgainstHash(accountDeletionSessionSecret)
+	if !secretValid {
+		return accountDeletionSessionStruct{}, errInvalidAccountDeletionSessionToken
 	}
 
-	return accountDeletion, nil
+	return accountDeletionSession, nil
 }
 
-func (server *serverStruct) validateRequestAccountDeletionToken(r *http.Request) (accountDeletionStruct, string, error) {
-	accountDeletionTokenCookie, err := r.Cookie(accountDeletionTokenCookieName)
-	if err != nil {
-		return accountDeletionStruct{}, "", errInvalidAccountDeletionToken
-	}
-	accountDeletionToken := accountDeletionTokenCookie.Value
+const accountDeletionSessionTokenCookieName = "account_deletion_session_token"
 
-	accountDeletion, err := server.validateAccountDeletionToken(accountDeletionToken)
-	if errors.Is(err, errInvalidAccountDeletionToken) {
-		return accountDeletionStruct{}, "", errInvalidAccountDeletionToken
+func (server *serverStruct) validateRequestAccountDeletionSessionToken(r *http.Request) (accountDeletionSessionStruct, string, error) {
+	accountDeletionSessionTokenCookie, err := r.Cookie(accountDeletionSessionTokenCookieName)
+	if err != nil {
+		return accountDeletionSessionStruct{}, "", errInvalidAccountDeletionSessionToken
+	}
+	accountDeletionSessionToken := accountDeletionSessionTokenCookie.Value
+
+	accountDeletionSession, err := server.validateAccountDeletionSessionToken(accountDeletionSessionToken)
+	if errors.Is(err, errInvalidAccountDeletionSessionToken) {
+		return accountDeletionSessionStruct{}, "", errInvalidAccountDeletionSessionToken
 	}
 	if err != nil {
-		return accountDeletionStruct{}, "", fmt.Errorf("failed to validate accountDeletion token: %s", err.Error())
+		return accountDeletionSessionStruct{}, "", fmt.Errorf("failed to validate account deletion session token: %s", err.Error())
 	}
 
-	return accountDeletion, accountDeletionToken, nil
+	return accountDeletionSession, accountDeletionSessionToken, nil
 }
 
-func (server *serverStruct) completeAccountDeletionIdentityVerification(accountDeletionId string) error {
+func (server *serverStruct) setBlankAccountDeletionSessionTokenCookie(w http.ResponseWriter) {
+	server.setBlankSessionTokenCookie(w, accountDeletionSessionTokenCookieName)
+}
+
+func (server *serverStruct) completeAccountDeletion(accountDeletionSessionId string) error {
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
-
-	err = sqlitex.Execute(databaseWriteConnection, "BEGIN IMMEDIATE", nil)
-	if err != nil {
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		return fmt.Errorf("failed to begin transaction: %s", err.Error())
-	}
-
-	err = sqlitex.Execute(databaseWriteConnection, "UPDATE account_deletion SET identity_verified = 1 WHERE id = ? AND identity_verified = 0", &sqlitex.ExecOptions{
-		Args: []any{accountDeletionId},
-	})
-	if err != nil {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-
-		if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintUnique || sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
-			return errItemConflict
-		}
-		return fmt.Errorf("failed to update account_deletion table: %s", err.Error())
-	}
-	affectedCount := databaseWriteConnection.Changes()
-	if affectedCount < 1 {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-		return errItemNotFound
-	}
-
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM identity_verification WHERE verifying_action = 'account_deletion' AND verifying_action_id = ?", &sqlitex.ExecOptions{
-		Args: []any{accountDeletionId},
-	})
-	if err != nil {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-
-		if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintUnique || sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
-			return errItemConflict
-		}
-		return fmt.Errorf("failed to update identity_verification table: %s", err.Error())
-	}
-
-	err = sqlitex.Execute(databaseWriteConnection, "COMMIT", nil)
-	if err != nil {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-		return fmt.Errorf("failed to commit transaction: %s", err.Error())
-	}
-
-	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-
-	return nil
-}
-
-func (server *serverStruct) completeAccountDeletion(accountDeletionId string) error {
-	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
-	if err != nil {
-		return fmt.Errorf("failed to take database write connection: %s", err.Error())
-	}
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM user WHERE id IN (SELECT session.user_id FROM account_deletion INNER JOIN session ON account_deletion.session_id = session.id WHERE account_deletion.id = ? AND account_deletion.identity_verified = 1)", &sqlitex.ExecOptions{
-		Args: []any{accountDeletionId},
-	})
+	err = sqlitex.Execute(
+		databaseWriteConnection,
+		`DELETE FROM user WHERE id IN (
+SELECT auth_session.user_id FROM account_deletion_session
+INNER JOIN auth_session ON account_deletion_session.auth_session_id = auth_session.id
+WHERE account_deletion_session.id = ?
+AND account_deletion_session.identity_verified = 1
+)`,
+		&sqlitex.ExecOptions{
+			Args: []any{accountDeletionSessionId},
+		},
+	)
 	if err != nil {
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 		return fmt.Errorf("failed to delete from user table: %s", err.Error())
@@ -333,7 +258,7 @@ func (server *serverStruct) completeAccountDeletion(accountDeletionId string) er
 	return nil
 }
 
-func (server *serverStruct) deleteAccountDeletion(accountDeletionId string) error {
+func (server *serverStruct) deleteAccountDeletionSession(accountDeletionSessionId string) error {
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to take database write connection: %s", err.Error())
@@ -345,8 +270,8 @@ func (server *serverStruct) deleteAccountDeletion(accountDeletionId string) erro
 		return fmt.Errorf("failed to begin transaction: %s", err.Error())
 	}
 
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM account_deletion WHERE id = ?", &sqlitex.ExecOptions{
-		Args: []any{accountDeletionId},
+	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM account_deletion_session WHERE id = ?", &sqlitex.ExecOptions{
+		Args: []any{accountDeletionSessionId},
 	})
 	if err != nil {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
@@ -354,7 +279,7 @@ func (server *serverStruct) deleteAccountDeletion(accountDeletionId string) erro
 		if rollbackErr != nil {
 			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
-		return fmt.Errorf("failed to delete from account_deletion table: %s", err.Error())
+		return fmt.Errorf("failed to delete from account_deletion_session table: %s", err.Error())
 	}
 	affectedCount := databaseWriteConnection.Changes()
 	if affectedCount < 1 {
@@ -366,8 +291,8 @@ func (server *serverStruct) deleteAccountDeletion(accountDeletionId string) erro
 		return errItemNotFound
 	}
 
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM identity_verification WHERE verifying_action = 'account_deletion' AND verifying_action_id = ?", &sqlitex.ExecOptions{
-		Args: []any{accountDeletionId},
+	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM identity_verification_session WHERE verifying_action = 'account_deletion' AND verifying_action_id = ?", &sqlitex.ExecOptions{
+		Args: []any{accountDeletionSessionId},
 	})
 	if err != nil {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
@@ -375,7 +300,7 @@ func (server *serverStruct) deleteAccountDeletion(accountDeletionId string) erro
 		if rollbackErr != nil {
 			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
-		return fmt.Errorf("failed to delete from identity_verification table: %s", err.Error())
+		return fmt.Errorf("failed to delete from identity_verification_session table: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(databaseWriteConnection, "COMMIT", nil)

@@ -96,32 +96,32 @@ func (server *serverStruct) logRequestEvent(eventName string, requestId string, 
 	if tags.passkeyId != "" {
 		tagsJSONBuilder.AddString("passkey_id", tags.passkeyId)
 	}
-	if tags.sessionId != "" {
-		tagsJSONBuilder.AddString("session_id", tags.sessionId)
+	if tags.authSessionId != "" {
+		tagsJSONBuilder.AddString("auth_session_id", tags.authSessionId)
 	}
-	if tags.signupId != "" {
-		tagsJSONBuilder.AddString("signup_id", tags.signupId)
+	if tags.signupSessionId != "" {
+		tagsJSONBuilder.AddString("signup_session_id", tags.signupSessionId)
 	}
-	if tags.emailCodeSigninId != "" {
-		tagsJSONBuilder.AddString("email_code_signin_id", tags.emailCodeSigninId)
+	if tags.emailCodeSigninSessionId != "" {
+		tagsJSONBuilder.AddString("email_code_signin_session_id", tags.emailCodeSigninSessionId)
 	}
-	if tags.passkeySigninId != "" {
-		tagsJSONBuilder.AddString("passkey_signin_id", tags.passkeySigninId)
+	if tags.passkeySigninAttemptId != "" {
+		tagsJSONBuilder.AddString("passkey_signin_attempt_id", tags.passkeySigninAttemptId)
 	}
-	if tags.identityVerificationId != "" {
-		tagsJSONBuilder.AddString("identity_verification_id", tags.identityVerificationId)
+	if tags.identityVerificationSessionId != "" {
+		tagsJSONBuilder.AddString("identity_verification_session_id", tags.identityVerificationSessionId)
 	}
-	if tags.emailAddressUpdateId != "" {
-		tagsJSONBuilder.AddString("email_address_update_id", tags.emailAddressUpdateId)
+	if tags.emailAddressUpdateSessionId != "" {
+		tagsJSONBuilder.AddString("email_address_update_session_id", tags.emailAddressUpdateSessionId)
 	}
-	if tags.passkeyRegistrationId != "" {
-		tagsJSONBuilder.AddString("passkey_registration_id", tags.passkeyRegistrationId)
+	if tags.passkeyRegistrationSessionId != "" {
+		tagsJSONBuilder.AddString("passkey_registration_session_id", tags.passkeyRegistrationSessionId)
 	}
-	if tags.passkeyDeletionId != "" {
-		tagsJSONBuilder.AddString("passkey_deletion_id", tags.passkeyDeletionId)
+	if tags.passkeyDeletionSessionId != "" {
+		tagsJSONBuilder.AddString("passkey_deletion_session_id", tags.passkeyDeletionSessionId)
 	}
-	if tags.accountDeletionId != "" {
-		tagsJSONBuilder.AddString("account_deletion_id", tags.accountDeletionId)
+	if tags.accountDeletionSessionId != "" {
+		tagsJSONBuilder.AddString("account_deletion_session_id", tags.accountDeletionSessionId)
 	}
 	if tags.emailAddress != "" {
 		tagsJSONBuilder.AddString("email_address", tags.emailAddress)
@@ -141,18 +141,18 @@ func (server *serverStruct) logRequestEvent(eventName string, requestId string, 
 }
 
 type requestEventTagsStruct struct {
-	userId                 string
-	passkeyId              string
-	sessionId              string
-	signupId               string
-	emailCodeSigninId      string
-	passkeySigninId        string
-	identityVerificationId string
-	emailAddressUpdateId   string
-	passkeyRegistrationId  string
-	passkeyDeletionId      string
-	accountDeletionId      string
-	emailAddress           string
+	userId                        string
+	passkeyId                     string
+	authSessionId                 string
+	signupSessionId               string
+	emailCodeSigninSessionId      string
+	passkeySigninAttemptId        string
+	identityVerificationSessionId string
+	emailAddressUpdateSessionId   string
+	passkeyRegistrationSessionId  string
+	passkeyDeletionSessionId      string
+	accountDeletionSessionId      string
+	emailAddress                  string
 }
 
 func (server *serverStruct) logBackgroundJobRun(runId string, backgroundJobName string) {

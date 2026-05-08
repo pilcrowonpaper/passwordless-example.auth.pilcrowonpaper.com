@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/pilcrowonpaper/passwordless-example.auth.pilcrowonpaper.com/webauthn"
@@ -14,9 +12,9 @@ import (
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-type passkeyRegistrationStruct struct {
+type passkeyRegistrationSessionStruct struct {
 	id                                    string
-	sessionId                             string
+	authSessionId                         string
 	secretHash                            []byte
 	identityVerified                      bool
 	passkeyCOSEPublicKey                  []byte
@@ -28,61 +26,61 @@ type passkeyRegistrationStruct struct {
 	createdAt                             time.Time
 }
 
-func (passkeyRegistration *passkeyRegistrationStruct) compareSecretAgainstHash(secret []byte) bool {
+func (passkeyRegistrationSession *passkeyRegistrationSessionStruct) compareSecretAgainstHash(secret []byte) bool {
 	hashed := hashSessionSecret(secret)
-	hashEqual := constantTimeCompare(hashed, passkeyRegistration.secretHash)
+	hashEqual := constantTimeCompare(hashed, passkeyRegistrationSession.secretHash)
 	return hashEqual
 }
 
-func (server *serverStruct) createPasskeyRegistration(sessionId string) (passkeyRegistrationStruct, []byte, identityVerificationStruct, []byte, error) {
+func (server *serverStruct) createPasskeyRegistrationSession(authSessionId string) (passkeyRegistrationSessionStruct, []byte, identityVerificationSessionStruct, []byte, error) {
 	nowSecondPrecision := getCurrentTimeSecondPrecision()
 
-	passkeyRegistrationId := generateItemId()
-	passkeyRegistrationSecret := generateSessionSecret()
-	passkeyRegistrationSecretHash := hashSessionSecret(passkeyRegistrationSecret)
+	passkeyRegistrationSessionId := generateItemId()
+	passkeyRegistrationSessionSecret := generateSessionSecret()
+	passkeyRegistrationSessionSecretHash := hashSessionSecret(passkeyRegistrationSessionSecret)
 
-	passkeyRegistration := passkeyRegistrationStruct{
-		id:         passkeyRegistrationId,
-		sessionId:  sessionId,
-		secretHash: passkeyRegistrationSecretHash,
-		createdAt:  nowSecondPrecision,
+	passkeyRegistrationSession := passkeyRegistrationSessionStruct{
+		id:            passkeyRegistrationSessionId,
+		authSessionId: authSessionId,
+		secretHash:    passkeyRegistrationSessionSecretHash,
+		createdAt:     nowSecondPrecision,
 	}
 
-	identityVerificationId := generateItemId()
-	identityVerificationSecret := generateSessionSecret()
-	identityVerificationSecretHash := hashSessionSecret(identityVerificationSecret)
-	identityVerificationPasskeyVerificationChallenge := webauthn.GenerateChallenge()
+	identityVerificationSessionId := generateItemId()
+	identityVerificationSessionSecret := generateSessionSecret()
+	identityVerificationSessionSecretHash := hashSessionSecret(identityVerificationSessionSecret)
+	identityVerificationSessionPasskeyVerificationChallenge := webauthn.GenerateChallenge()
 
-	identityVerification := identityVerificationStruct{
-		id:                           identityVerificationId,
-		sessionId:                    sessionId,
-		secretHash:                   identityVerificationSecretHash,
-		verifyingAction:              identityVerificationVerifyingActionPasskeyRegistration,
-		verifyingActionId:            passkeyRegistration.id,
-		passkeyVerificationChallenge: identityVerificationPasskeyVerificationChallenge,
+	identityVerificationSession := identityVerificationSessionStruct{
+		id:                           identityVerificationSessionId,
+		authSessionId:                authSessionId,
+		secretHash:                   identityVerificationSessionSecretHash,
+		verifyingAction:              identityVerificationSessionVerifyingActionPasskeyRegistration,
+		verifyingActionId:            passkeyRegistrationSession.id,
+		passkeyVerificationChallenge: identityVerificationSessionPasskeyVerificationChallenge,
 		createdAt:                    nowSecondPrecision,
 	}
 
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
-		return passkeyRegistrationStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to take database write connection: %s", err.Error())
+		return passkeyRegistrationSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(databaseWriteConnection, "BEGIN IMMEDIATE", nil)
 	if err != nil {
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		return passkeyRegistrationStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to begin transaction: %s", err.Error())
+		return passkeyRegistrationSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to begin transaction: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(
 		databaseWriteConnection,
-		"INSERT INTO passkey_registration (id, session_id, secret_hash, created_at) VALUES (?, ?, ?, ?)",
+		"INSERT INTO passkey_registration_session (id, auth_session_id, secret_hash, created_at) VALUES (?, ?, ?, ?)",
 		&sqlitex.ExecOptions{
 			Args: []any{
-				passkeyRegistration.id,
-				passkeyRegistration.sessionId,
-				passkeyRegistration.secretHash,
-				passkeyRegistration.createdAt.Unix(),
+				passkeyRegistrationSession.id,
+				passkeyRegistrationSession.authSessionId,
+				passkeyRegistrationSession.secretHash,
+				passkeyRegistrationSession.createdAt.Unix(),
 			},
 		},
 	)
@@ -90,24 +88,24 @@ func (server *serverStruct) createPasskeyRegistration(sessionId string) (passkey
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 		if rollbackErr != nil {
-			return passkeyRegistrationStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+			return passkeyRegistrationSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
 
-		return passkeyRegistrationStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to insert into passkey_registration table: %s", err.Error())
+		return passkeyRegistrationSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to insert into passkey_registration_session table: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(
 		databaseWriteConnection,
-		"INSERT INTO identity_verification (id, session_id, secret_hash, verifying_action, verifying_action_id, passkey_verification_challenge, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO identity_verification_session (id, auth_session_id, secret_hash, verifying_action, verifying_action_id, passkey_verification_challenge, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		&sqlitex.ExecOptions{
 			Args: []any{
-				identityVerification.id,
-				identityVerification.sessionId,
-				identityVerification.secretHash,
-				identityVerification.verifyingAction,
-				identityVerification.verifyingActionId,
-				identityVerification.passkeyVerificationChallenge,
-				identityVerification.createdAt.Unix(),
+				identityVerificationSession.id,
+				identityVerificationSession.authSessionId,
+				identityVerificationSession.secretHash,
+				identityVerificationSession.verifyingAction,
+				identityVerificationSession.verifyingActionId,
+				identityVerificationSession.passkeyVerificationChallenge,
+				identityVerificationSession.createdAt.Unix(),
 			},
 		},
 	)
@@ -115,10 +113,10 @@ func (server *serverStruct) createPasskeyRegistration(sessionId string) (passkey
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 		if rollbackErr != nil {
-			return passkeyRegistrationStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+			return passkeyRegistrationSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
 
-		return passkeyRegistrationStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to insert into identity_verification table: %s", err.Error())
+		return passkeyRegistrationSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to insert into identity_verification_session table: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(databaseWriteConnection, "COMMIT", nil)
@@ -126,30 +124,30 @@ func (server *serverStruct) createPasskeyRegistration(sessionId string) (passkey
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 		if rollbackErr != nil {
-			return passkeyRegistrationStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+			return passkeyRegistrationSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
-		return passkeyRegistrationStruct{}, nil, identityVerificationStruct{}, nil, fmt.Errorf("failed to commit transaction: %s", err.Error())
+		return passkeyRegistrationSessionStruct{}, nil, identityVerificationSessionStruct{}, nil, fmt.Errorf("failed to commit transaction: %s", err.Error())
 	}
 
 	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 
-	return passkeyRegistration, passkeyRegistrationSecret, identityVerification, identityVerificationSecret, nil
+	return passkeyRegistrationSession, passkeyRegistrationSessionSecret, identityVerificationSession, identityVerificationSessionSecret, nil
 }
 
-func (server *serverStruct) getPasskeyRegistration(passkeyRegistrationId string) (passkeyRegistrationStruct, error) {
-	passkeyRegistrations := []passkeyRegistrationStruct{}
+func (server *serverStruct) getPasskeyRegistrationSession(passkeyRegistrationSessionId string) (passkeyRegistrationSessionStruct, error) {
+	passkeyRegistrationSessions := []passkeyRegistrationSessionStruct{}
 
 	databaseReadConnection, err := server.databaseReadConnectionPool.Take(context.Background())
 	if err != nil {
-		return passkeyRegistrationStruct{}, fmt.Errorf("failed to take database read connection: %s", err.Error())
+		return passkeyRegistrationSessionStruct{}, fmt.Errorf("failed to take database read connection: %s", err.Error())
 	}
 	err = sqlitex.Execute(
 		databaseReadConnection,
-		"SELECT session_id, secret_hash, identity_verified, passkey_cose_public_key, passkey_webauthn_credential_id, passkey_webauthn_authenticator_id, created_at FROM passkey_registration WHERE id = ?",
+		"SELECT auth_session_id, secret_hash, identity_verified, passkey_cose_public_key, passkey_webauthn_credential_id, passkey_webauthn_authenticator_id, created_at FROM passkey_registration_session WHERE id = ?",
 		&sqlitex.ExecOptions{
-			Args: []any{passkeyRegistrationId},
+			Args: []any{passkeyRegistrationSessionId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
-				sessionId := stmt.ColumnText(0)
+				authSessionId := stmt.ColumnText(0)
 
 				secretHash := make([]byte, stmt.ColumnLen(1))
 				stmt.ColumnBytes(1, secretHash)
@@ -182,9 +180,9 @@ func (server *serverStruct) getPasskeyRegistration(passkeyRegistrationId string)
 
 				createdAt := time.Unix(stmt.ColumnInt64(6), 0)
 
-				passkeyRegistration := passkeyRegistrationStruct{
-					id:                                    passkeyRegistrationId,
-					sessionId:                             sessionId,
+				passkeyRegistrationSession := passkeyRegistrationSessionStruct{
+					id:                                    passkeyRegistrationSessionId,
+					authSessionId:                         authSessionId,
 					secretHash:                            secretHash,
 					identityVerified:                      identityVerified,
 					passkeyCOSEPublicKey:                  passkeyCOSEPublicKey,
@@ -196,184 +194,102 @@ func (server *serverStruct) getPasskeyRegistration(passkeyRegistrationId string)
 					createdAt:                             createdAt,
 				}
 
-				passkeyRegistrations = append(passkeyRegistrations, passkeyRegistration)
+				passkeyRegistrationSessions = append(passkeyRegistrationSessions, passkeyRegistrationSession)
 				return nil
 			},
 		},
 	)
 	server.databaseReadConnectionPool.Put(databaseReadConnection)
 	if err != nil {
-		return passkeyRegistrationStruct{}, fmt.Errorf("failed to select from passkey_registration table: %s", err.Error())
+		return passkeyRegistrationSessionStruct{}, fmt.Errorf("failed to select from passkey_registration_session table: %s", err.Error())
 	}
 
-	if len(passkeyRegistrations) < 1 {
-		return passkeyRegistrationStruct{}, errItemNotFound
+	if len(passkeyRegistrationSessions) < 1 {
+		return passkeyRegistrationSessionStruct{}, errItemNotFound
 	}
 
-	passkeyRegistration := passkeyRegistrations[0]
+	passkeyRegistrationSession := passkeyRegistrationSessions[0]
 
-	if time.Since(passkeyRegistration.createdAt) >= time.Hour {
-		return passkeyRegistrationStruct{}, errItemNotFound
+	if time.Since(passkeyRegistrationSession.createdAt) >= time.Hour {
+		return passkeyRegistrationSessionStruct{}, errItemNotFound
 	}
 
-	return passkeyRegistration, nil
+	return passkeyRegistrationSession, nil
 }
 
-const passkeyRegistrationTokenCookieName = "passkey_registration_token"
+var errInvalidPasskeyRegistrationSessionToken = errors.New("invalid passkey registration session token")
 
-func (server *serverStruct) setBlankPasskeyRegistrationTokenCookie(w http.ResponseWriter) {
-	cookie := &http.Cookie{
-		Name:     passkeyRegistrationTokenCookieName,
-		Value:    "",
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   -1,
-		Path:     "/",
-		Secure:   server.https(),
-	}
-	http.SetCookie(w, cookie)
-}
-
-var errInvalidPasskeyRegistrationToken = errors.New("invalid passkey registration token")
-
-func (server *serverStruct) validatePasskeyRegistrationToken(passkeyRegistrationToken string) (passkeyRegistrationStruct, error) {
-	passkeyRegistrationTokenParts := strings.Split(passkeyRegistrationToken, ".")
-	if len(passkeyRegistrationTokenParts) != 2 {
-		return passkeyRegistrationStruct{}, errInvalidPasskeyRegistrationToken
-	}
-	passkeyRegistrationId := passkeyRegistrationTokenParts[0]
-	encodedPasskeyRegistrationSecret := passkeyRegistrationTokenParts[1]
-	passkeyRegistrationSecret, err := base64.StdEncoding.DecodeString(encodedPasskeyRegistrationSecret)
+func (server *serverStruct) validatePasskeyRegistrationSessionToken(passkeyRegistrationSessionToken string) (passkeyRegistrationSessionStruct, error) {
+	passkeyRegistrationSessionId, passkeyRegistrationSessionSecret, err := parseSessionToken(passkeyRegistrationSessionToken)
 	if err != nil {
-		return passkeyRegistrationStruct{}, errInvalidPasskeyRegistrationToken
+		return passkeyRegistrationSessionStruct{}, errInvalidPasskeyRegistrationSessionToken
 	}
 
-	passkeyRegistration, err := server.getPasskeyRegistration(passkeyRegistrationId)
+	passkeyRegistrationSession, err := server.getPasskeyRegistrationSession(passkeyRegistrationSessionId)
 	if errors.Is(err, errItemNotFound) {
-		return passkeyRegistrationStruct{}, errInvalidPasskeyRegistrationToken
+		return passkeyRegistrationSessionStruct{}, errInvalidPasskeyRegistrationSessionToken
 	}
 	if err != nil {
-		return passkeyRegistrationStruct{}, fmt.Errorf("failed to get passkey registration: %s", err.Error())
+		return passkeyRegistrationSessionStruct{}, fmt.Errorf("failed to get passkey registration session: %s", err.Error())
 	}
 
-	passkeyRegistrationSecretValid := passkeyRegistration.compareSecretAgainstHash(passkeyRegistrationSecret)
-	if !passkeyRegistrationSecretValid {
-		return passkeyRegistrationStruct{}, errInvalidPasskeyRegistrationToken
+	secretValid := passkeyRegistrationSession.compareSecretAgainstHash(passkeyRegistrationSessionSecret)
+	if !secretValid {
+		return passkeyRegistrationSessionStruct{}, errInvalidPasskeyRegistrationSessionToken
 	}
 
-	return passkeyRegistration, nil
+	return passkeyRegistrationSession, nil
 }
 
-func (server *serverStruct) validateRequestPasskeyRegistrationToken(r *http.Request) (passkeyRegistrationStruct, string, error) {
-	passkeyRegistrationTokenCookie, err := r.Cookie(passkeyRegistrationTokenCookieName)
-	if err != nil {
-		return passkeyRegistrationStruct{}, "", errInvalidPasskeyRegistrationToken
-	}
-	passkeyRegistrationToken := passkeyRegistrationTokenCookie.Value
+const passkeyRegistrationSessionTokenCookieName = "passkey_registration_session_token"
 
-	passkeyRegistration, err := server.validatePasskeyRegistrationToken(passkeyRegistrationToken)
-	if errors.Is(err, errInvalidPasskeyRegistrationToken) {
-		return passkeyRegistrationStruct{}, "", errInvalidPasskeyRegistrationToken
+func (server *serverStruct) validateRequestPasskeyRegistrationSessionToken(r *http.Request) (passkeyRegistrationSessionStruct, string, error) {
+	passkeyRegistrationSessionTokenCookie, err := r.Cookie(passkeyRegistrationSessionTokenCookieName)
+	if err != nil {
+		return passkeyRegistrationSessionStruct{}, "", errInvalidPasskeyRegistrationSessionToken
+	}
+	passkeyRegistrationSessionToken := passkeyRegistrationSessionTokenCookie.Value
+
+	passkeyRegistrationSession, err := server.validatePasskeyRegistrationSessionToken(passkeyRegistrationSessionToken)
+	if errors.Is(err, errInvalidPasskeyRegistrationSessionToken) {
+		return passkeyRegistrationSessionStruct{}, "", errInvalidPasskeyRegistrationSessionToken
 	}
 	if err != nil {
-		return passkeyRegistrationStruct{}, "", fmt.Errorf("failed to validate passkeyRegistration token: %s", err.Error())
+		return passkeyRegistrationSessionStruct{}, "", fmt.Errorf("failed to validate passkey registration session token: %s", err.Error())
 	}
 
-	return passkeyRegistration, passkeyRegistrationToken, nil
+	return passkeyRegistrationSession, passkeyRegistrationSessionToken, nil
 }
 
-func (server *serverStruct) setPasskeyRegistrationPasskeyWebauthnCredential(passkeyRegistrationId string, webauthnCredentialId []byte, cosePublicKey []byte, webauthnAuthenticatorId []byte) error {
+func (server *serverStruct) setBlankPasskeyRegistrationSessionTokenCookie(w http.ResponseWriter) {
+	server.setBlankSessionTokenCookie(w, passkeyRegistrationSessionTokenCookieName)
+}
+
+func (server *serverStruct) setPasskeyRegistrationSessionPasskeyWebauthnCredential(passkeyRegistrationSessionId string, webauthnCredentialId []byte, cosePublicKey []byte, webauthnAuthenticatorId []byte) error {
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
-	err = sqlitex.Execute(databaseWriteConnection, `UPDATE passkey_registration
+	err = sqlitex.Execute(databaseWriteConnection, `UPDATE passkey_registration_session
 SET passkey_cose_public_key = ?, passkey_webauthn_credential_id = ?, passkey_webauthn_authenticator_id = ?
 WHERE id = ? AND passkey_cose_public_key IS NULL AND passkey_webauthn_credential_id IS NULL AND passkey_webauthn_authenticator_id IS NULL`, &sqlitex.ExecOptions{
-		Args: []any{cosePublicKey, webauthnCredentialId, webauthnAuthenticatorId, passkeyRegistrationId},
+		Args: []any{cosePublicKey, webauthnCredentialId, webauthnAuthenticatorId, passkeyRegistrationSessionId},
 	})
 	if err != nil {
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		return fmt.Errorf("failed to update passkey_registration table: %s", err.Error())
+		return fmt.Errorf("failed to update passkey_registration_session table: %s", err.Error())
 	}
 	affectedCount := databaseWriteConnection.Changes()
 	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 	if affectedCount < 1 {
 		return errItemNotFound
 	}
-	return nil
-}
-
-func (server *serverStruct) completePasskeyRegistrationIdentityVerification(passkeyRegistrationId string) error {
-	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
-	if err != nil {
-		return fmt.Errorf("failed to take database write connection: %s", err.Error())
-	}
-
-	err = sqlitex.Execute(databaseWriteConnection, "BEGIN IMMEDIATE", nil)
-	if err != nil {
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		return fmt.Errorf("failed to begin transaction: %s", err.Error())
-	}
-
-	err = sqlitex.Execute(databaseWriteConnection, "UPDATE passkey_registration SET identity_verified = 1 WHERE id = ? AND identity_verified = 0", &sqlitex.ExecOptions{
-		Args: []any{passkeyRegistrationId},
-	})
-	if err != nil {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-
-		if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintUnique || sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
-			return errItemConflict
-		}
-		return fmt.Errorf("failed to update passkey_registration table: %s", err.Error())
-	}
-	affectedCount := databaseWriteConnection.Changes()
-	if affectedCount < 1 {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-		return errItemNotFound
-	}
-
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM identity_verification WHERE verifying_action = 'passkey_registration' AND verifying_action_id = ?", &sqlitex.ExecOptions{
-		Args: []any{passkeyRegistrationId},
-	})
-	if err != nil {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-
-		if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintUnique || sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
-			return errItemConflict
-		}
-		return fmt.Errorf("failed to update identity_verification table: %s", err.Error())
-	}
-
-	err = sqlitex.Execute(databaseWriteConnection, "COMMIT", nil)
-	if err != nil {
-		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
-		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		if rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
-		}
-		return fmt.Errorf("failed to commit transaction: %s", err.Error())
-	}
-
-	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-
 	return nil
 }
 
 const maxPasskeyCountLimit = 10
 
-func (server *serverStruct) completePasskeyRegistration(passkeyRegistrationId string, passkeyName string) (passkeyStruct, error) {
+func (server *serverStruct) completePasskeyRegistration(passkeyRegistrationSessionId string, passkeyName string) (passkeyStruct, error) {
 	nowSecondPrecision := getCurrentTimeSecondPrecision()
 
 	passkeyId := generateItemId()
@@ -392,11 +308,11 @@ func (server *serverStruct) completePasskeyRegistration(passkeyRegistrationId st
 	passkeyCount := 0
 	err = sqlitex.Execute(databaseWriteConnection, `SELECT count(*) FROM passkey
 WHERE user_id = (
-SELECT session.user_id FROM passkey_registration
-INNER JOIN session ON passkey_registration.session_id = session.id
-WHERE passkey_registration.id = ?
+SELECT auth_session.user_id FROM passkey_registration_session
+INNER JOIN auth_session ON passkey_registration_session.auth_session_id = auth_session.id
+WHERE passkey_registration_session.id = ?
 )`, &sqlitex.ExecOptions{
-		Args: []any{passkeyRegistrationId},
+		Args: []any{passkeyRegistrationSessionId},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			passkeyCount = stmt.ColumnInt(0)
 			return nil
@@ -421,15 +337,15 @@ WHERE passkey_registration.id = ?
 
 	passkeys := []passkeyStruct{}
 	err = sqlitex.Execute(databaseWriteConnection, `INSERT INTO passkey (id, user_id, webauthn_credential_id, cose_public_key, webauthn_authenticator_id, name, created_at)
-SELECT ?, session.user_id, passkey_registration.passkey_webauthn_credential_id, passkey_registration.passkey_cose_public_key, passkey_registration.passkey_webauthn_authenticator_id, ?, ? FROM passkey_registration
-INNER JOIN session ON passkey_registration.session_id = session.id
-WHERE passkey_registration.id = ?
-AND passkey_registration.passkey_webauthn_credential_id IS NOT NULL
-AND passkey_registration.passkey_cose_public_key IS NOT NULL
-AND passkey_registration.passkey_webauthn_authenticator_id IS NOT NULL
-AND passkey_registration.identity_verified = 1
+SELECT ?, auth_session.user_id, passkey_registration_session.passkey_webauthn_credential_id, passkey_registration_session.passkey_cose_public_key, passkey_registration_session.passkey_webauthn_authenticator_id, ?, ? FROM passkey_registration_session
+INNER JOIN auth_session ON passkey_registration_session.auth_session_id = auth_session.id
+WHERE passkey_registration_session.id = ?
+AND passkey_registration_session.passkey_webauthn_credential_id IS NOT NULL
+AND passkey_registration_session.passkey_cose_public_key IS NOT NULL
+AND passkey_registration_session.passkey_webauthn_authenticator_id IS NOT NULL
+AND passkey_registration_session.identity_verified = 1
 RETURNING user_id, webauthn_credential_id, cose_public_key, webauthn_authenticator_id, name`, &sqlitex.ExecOptions{
-		Args: []any{passkeyId, passkeyName, nowSecondPrecision.Unix(), passkeyRegistrationId},
+		Args: []any{passkeyId, passkeyName, nowSecondPrecision.Unix(), passkeyRegistrationSessionId},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			userId := stmt.ColumnText(0)
 
@@ -478,8 +394,8 @@ RETURNING user_id, webauthn_credential_id, cose_public_key, webauthn_authenticat
 	}
 	passkey := passkeys[0]
 
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM passkey_registration WHERE id = ?", &sqlitex.ExecOptions{
-		Args: []any{passkeyRegistrationId},
+	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM passkey_registration_session WHERE id = ?", &sqlitex.ExecOptions{
+		Args: []any{passkeyRegistrationSessionId},
 	})
 	if err != nil {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
@@ -487,7 +403,7 @@ RETURNING user_id, webauthn_credential_id, cose_public_key, webauthn_authenticat
 		if rollbackErr != nil {
 			return passkeyStruct{}, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
-		return passkeyStruct{}, fmt.Errorf("failed to delete from passkey_registration table: %s", err.Error())
+		return passkeyStruct{}, fmt.Errorf("failed to delete from passkey_registration_session table: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(databaseWriteConnection, "COMMIT", nil)
@@ -505,7 +421,7 @@ RETURNING user_id, webauthn_credential_id, cose_public_key, webauthn_authenticat
 	return passkey, nil
 }
 
-func (server *serverStruct) deletePasskeyRegistration(passkeyRegistrationId string) error {
+func (server *serverStruct) deletePasskeyRegistrationSession(passkeyRegistrationSessionId string) error {
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to take database write connection: %s", err.Error())
@@ -517,8 +433,8 @@ func (server *serverStruct) deletePasskeyRegistration(passkeyRegistrationId stri
 		return fmt.Errorf("failed to begin transaction: %s", err.Error())
 	}
 
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM passkey_registration WHERE id = ?", &sqlitex.ExecOptions{
-		Args: []any{passkeyRegistrationId},
+	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM passkey_registration_session WHERE id = ?", &sqlitex.ExecOptions{
+		Args: []any{passkeyRegistrationSessionId},
 	})
 	if err != nil {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
@@ -526,7 +442,7 @@ func (server *serverStruct) deletePasskeyRegistration(passkeyRegistrationId stri
 		if rollbackErr != nil {
 			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
-		return fmt.Errorf("failed to delete from passkey_registration table: %s", err.Error())
+		return fmt.Errorf("failed to delete from passkey_registration_session table: %s", err.Error())
 	}
 	affectedCount := databaseWriteConnection.Changes()
 	if affectedCount < 1 {
@@ -538,8 +454,8 @@ func (server *serverStruct) deletePasskeyRegistration(passkeyRegistrationId stri
 		return errItemNotFound
 	}
 
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM identity_verification WHERE verifying_action = 'passkey_registration' AND verifying_action_id = ?", &sqlitex.ExecOptions{
-		Args: []any{passkeyRegistrationId},
+	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM identity_verification_session WHERE verifying_action = 'passkey_registration' AND verifying_action_id = ?", &sqlitex.ExecOptions{
+		Args: []any{passkeyRegistrationSessionId},
 	})
 	if err != nil {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
@@ -547,7 +463,7 @@ func (server *serverStruct) deletePasskeyRegistration(passkeyRegistrationId stri
 		if rollbackErr != nil {
 			return fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
-		return fmt.Errorf("failed to delete from identity_verification table: %s", err.Error())
+		return fmt.Errorf("failed to delete from identity_verification_session table: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(databaseWriteConnection, "COMMIT", nil)

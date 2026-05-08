@@ -2,9 +2,11 @@
 
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
 
-let passkeySigninId = pageDataJSONObject.passkey_signin_id;
-let passkeySigninChallenge = Uint8Array.fromBase64(pageDataJSONObject.passkey_signin_challenge);
-let passkeySigninRefreshAt = new Date(Date.now() + 50 * 60 * 1000);
+let passkeySigninAttemptId = pageDataJSONObject.passkey_signin_attempt_id;
+let passkeySigninWebauthnChallenge = Uint8Array.fromBase64(
+	pageDataJSONObject.passkey_signin_webauthn_challenge,
+);
+let passkeySigninAttemptRefreshAt = new Date(Date.now() + 50 * 60 * 1000);
 
 const conditionalWebauthnRequestAbortController = new AbortController();
 setTimeout(conditionalWebauthnRequestAbortController.abort, 50 * 60 * 1000);
@@ -64,14 +66,16 @@ async function handleSignInWithEmailCodeFormSubmitEvent(event) {
 		return;
 	}
 
-	setEmailCodeSigninTokenCookie(actionResult.valuesJSONObject.email_code_signin_token);
+	setEmailCodeSigninSessionTokenCookie(
+		actionResult.valuesJSONObject.email_code_signin_session_token,
+	);
 	window.location.href = "/sign-in/verify-email-code";
 }
 
 async function handleSignInWithPasskeyButtonClickEvent() {
 	signInWithPasskeyButtonElement.disabled = true;
 
-	if (Date.now() >= passkeySigninRefreshAt.getTime()) {
+	if (Date.now() >= passkeySigninAttemptRefreshAt.getTime()) {
 		const actionValuesJSONObject = {
 			email_address: emailAddress,
 		};
@@ -100,11 +104,11 @@ async function handleSignInWithPasskeyButtonClickEvent() {
 			return;
 		}
 
-		passkeySigninId = actionResult.valuesJSONObject.passkey_signin_id;
-		passkeySigninChallenge = Uint8Array.fromBase64(
-			actionResult.valuesJSONObject.passkey_signin_challenge,
+		passkeySigninAttemptId = actionResult.valuesJSONObject.passkey_signin_attempt_id;
+		passkeySigninWebauthnChallenge = Uint8Array.fromBase64(
+			actionResult.valuesJSONObject.webauthn_challenge,
 		);
-		passkeySigninRefreshAt = new Date(Date.now() + 50 * 60 * 1000);
+		passkeySigninAttemptRefreshAt = new Date(Date.now() + 50 * 60 * 1000);
 	}
 
 	conditionalWebauthnRequestAbortController.abort();
@@ -112,7 +116,7 @@ async function handleSignInWithPasskeyButtonClickEvent() {
 	try {
 		credential = await navigator.credentials.get({
 			publicKey: {
-				challenge: passkeySigninChallenge,
+				challenge: passkeySigninWebauthnChallenge,
 				userVerification: "required",
 				timeout: 5 * 60 * 1000,
 			},
@@ -136,7 +140,7 @@ async function startConditionalMediationCredentialRequest() {
 	try {
 		credential = await navigator.credentials.get({
 			publicKey: {
-				challenge: passkeySigninChallenge,
+				challenge: passkeySigninWebauthnChallenge,
 				userVerification: "required",
 			},
 			mediation: "conditional",
@@ -159,7 +163,7 @@ async function completePasskeySignin(credential) {
 	const signature = new Uint8Array(credential.response.signature);
 
 	const actionValuesJSONObject = {
-		passkey_signin_id: passkeySigninId,
+		passkey_signin_attempt_id: passkeySigninAttemptId,
 		webauthn_credential_id: credentialId.toBase64(),
 		webauthn_authenticator_data: authenticatorData.toBase64(),
 		webauthn_client_data_json: clientDataJSON.toBase64(),
@@ -179,7 +183,7 @@ async function completePasskeySignin(credential) {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "passkey_signin_not_found") {
+		if (actionResult.errorCode === "passkey_signin_attempt_not_found") {
 			alert("Please try again.");
 			signInWithPasskeyButtonElement.disabled = false;
 			return;
@@ -197,7 +201,7 @@ async function completePasskeySignin(credential) {
 		return;
 	}
 
-	setSessionTokenCookie(actionResult.valuesJSONObject.session_token);
+	setSessionTokenCookie(actionResult.valuesJSONObject.auth_session_token);
 
 	window.location.href = "/account";
 }

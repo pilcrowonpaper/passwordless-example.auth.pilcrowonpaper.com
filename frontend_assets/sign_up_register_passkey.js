@@ -1,7 +1,7 @@
 "use strict";
 
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
-const signupToken = pageDataJSONObject.signup_token;
+const signupSessionToken = pageDataJSONObject.signup_session_token;
 const signupTargetUserId = pageDataJSONObject.signup_target_user_id;
 const signupEmailAddress = pageDataJSONObject.signup_email_address;
 
@@ -68,7 +68,7 @@ async function handleCreatePasskeyButtonClickEvent() {
 	const authenticatorDataBytes = new Uint8Array(credential.response.getAuthenticatorData());
 
 	const actionValuesJSONObject = {
-		signup_token: signupToken,
+		signup_session_token: signupSessionToken,
 		webauthn_authenticator_data: authenticatorDataBytes.toBase64(),
 	};
 
@@ -86,8 +86,8 @@ async function handleCreatePasskeyButtonClickEvent() {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_signup_token") {
-			deleteSignupTokenCookie();
+		if (actionResult.errorCode === "invalid_signup_session_token") {
+			deleteSignupSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/sign-up";
@@ -117,7 +117,7 @@ async function handleSkipButtonClickEvent() {
 	skipButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
-		signup_token: signupToken,
+		signup_session_token: signupSessionToken,
 	};
 
 	let actionResult;
@@ -134,15 +134,15 @@ async function handleSkipButtonClickEvent() {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_signup_token") {
-			deleteSignupTokenCookie();
+		if (actionResult.errorCode === "invalid_signup_session_token") {
+			deleteSignupSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/sign-up";
 			return;
 		}
 		if (actionResult.errorCode === "email_address_already_used") {
-			deleteSignupTokenCookie();
+			deleteSignupSessionTokenCookie();
 
 			alert("This email address is already linked to an existing account.");
 			window.location.href = "/sign-up";
@@ -155,8 +155,8 @@ async function handleSkipButtonClickEvent() {
 		return;
 	}
 
-	deleteSignupTokenCookie();
-	setSessionTokenCookie(actionResult.valuesJSONObject.session_token);
+	deleteSignupSessionTokenCookie();
+	setSessionTokenCookie(actionResult.valuesJSONObject.auth_session_token);
 
 	window.location.href = "/account";
 }

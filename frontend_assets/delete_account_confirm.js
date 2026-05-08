@@ -1,8 +1,8 @@
 "use strict";
 
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
-const sessionToken = pageDataJSONObject.session_token;
-const accountDeletionToken = pageDataJSONObject.account_deletion_token;
+const authSessionToken = pageDataJSONObject.auth_session_token;
+const accountDeletionSessionToken = pageDataJSONObject.account_deletion_session_token;
 
 const confirmButtonElement = document.getElementById("confirm-button");
 confirmButtonElement.addEventListener("click", handleConfirmButtonClickEvent);
@@ -14,8 +14,8 @@ async function handleConfirmButtonClickEvent() {
 	confirmButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
-		session_token: sessionToken,
-		account_deletion_token: accountDeletionToken,
+		auth_session_token: authSessionToken,
+		account_deletion_session_token: accountDeletionSessionToken,
 	};
 
 	let actionResult;
@@ -29,19 +29,19 @@ async function handleConfirmButtonClickEvent() {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_session_token") {
+		if (actionResult.errorCode === "invalid_auth_session_token") {
 			deleteSessionTokenCookie();
-			deleteAccountDeletionTokenCookie();
+			deleteAccountDeletionSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/sign-in";
 			return;
 		}
 		if (
-			actionResult.errorCode === "invalid_account_deletion_token" ||
+			actionResult.errorCode === "invalid_account_deletion_session_token" ||
 			actionResult.errorCode === "session_mismatch"
 		) {
-			deleteAccountDeletionTokenCookie();
+			deleteAccountDeletionSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/account";
@@ -55,7 +55,7 @@ async function handleConfirmButtonClickEvent() {
 		return;
 	}
 
-	deleteAccountDeletionTokenCookie();
+	deleteAccountDeletionSessionTokenCookie();
 	deleteSessionTokenCookie();
 
 	window.location.href = "/account";
@@ -65,8 +65,8 @@ async function handleCancelButtonClickEvent() {
 	cancelButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
-		session_token: sessionToken,
-		account_deletion_token: accountDeletionToken,
+		auth_session_token: authSessionToken,
+		account_deletion_session_token: accountDeletionSessionToken,
 	};
 
 	let actionResult;
@@ -80,19 +80,19 @@ async function handleCancelButtonClickEvent() {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_session_token") {
+		if (actionResult.errorCode === "invalid_auth_session_token") {
 			deleteSessionTokenCookie();
-			deleteAccountDeletionTokenCookie();
+			deleteAccountDeletionSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/sign-in";
 			return;
 		}
 		if (
-			actionResult.errorCode === "invalid_account_deletion_token" ||
+			actionResult.errorCode === "invalid_account_deletion_session_token" ||
 			actionResult.errorCode === "session_mismatch"
 		) {
-			deleteAccountDeletionTokenCookie();
+			deleteAccountDeletionSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/account";
@@ -106,7 +106,7 @@ async function handleCancelButtonClickEvent() {
 		return;
 	}
 
-	deleteAccountDeletionTokenCookie();
+	deleteAccountDeletionSessionTokenCookie();
 
 	window.location.href = "/account";
 }

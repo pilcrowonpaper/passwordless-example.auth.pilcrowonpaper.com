@@ -2,18 +2,16 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-type emailCodeSigninStruct struct {
+type emailCodeSigninSessionStruct struct {
 	id         string
 	userId     string
 	secretHash []byte
@@ -21,17 +19,17 @@ type emailCodeSigninStruct struct {
 	createdAt  time.Time
 }
 
-func (emailCodeSignin *emailCodeSigninStruct) compareSecretAgainstHash(secret []byte) bool {
+func (emailCodeSigninSession *emailCodeSigninSessionStruct) compareSecretAgainstHash(secret []byte) bool {
 	hashed := hashSessionSecret(secret)
-	hashEqual := constantTimeCompare(hashed, emailCodeSignin.secretHash)
+	hashEqual := constantTimeCompare(hashed, emailCodeSigninSession.secretHash)
 	return hashEqual
 }
 
-func (emailCodeSignin *emailCodeSigninStruct) compareEmailCode(emailCode string) bool {
-	return constantTimeCompareStrings(emailCode, emailCodeSignin.emailCode)
+func (emailCodeSigninSession *emailCodeSigninSessionStruct) compareEmailCode(emailCode string) bool {
+	return constantTimeCompareStrings(emailCode, emailCodeSigninSession.emailCode)
 }
 
-func (server *serverStruct) createEmailCodeSigninFromUserEmailAddress(userEmailAddress string) (emailCodeSigninStruct, []byte, error) {
+func (server *serverStruct) createEmailCodeSigninSessionFromUserEmailAddress(userEmailAddress string) (emailCodeSigninSessionStruct, []byte, error) {
 	nowSecondPrecision := getCurrentTimeSecondPrecision()
 
 	id := generateItemId()
@@ -44,11 +42,11 @@ func (server *serverStruct) createEmailCodeSigninFromUserEmailAddress(userEmailA
 	userIds := []string{}
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
-		return emailCodeSigninStruct{}, nil, fmt.Errorf("failed to take database write connection: %s", err.Error())
+		return emailCodeSigninSessionStruct{}, nil, fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
 	err = sqlitex.Execute(
 		databaseWriteConnection,
-		`INSERT INTO email_code_signin (id, user_id, secret_hash, email_code, created_at)
+		`INSERT INTO email_code_signin_session (id, user_id, secret_hash, email_code, created_at)
 SELECT ?, user.id, ?, ?, ? FROM user
 WHERE user.email_address = ?
 RETURNING user_id`,
@@ -69,16 +67,16 @@ RETURNING user_id`,
 	)
 	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 	if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
-		return emailCodeSigninStruct{}, nil, errItemConflict
+		return emailCodeSigninSessionStruct{}, nil, errItemConflict
 	}
 	if err != nil {
-		return emailCodeSigninStruct{}, nil, fmt.Errorf("failed to insert into email_code_signin table: %s", err.Error())
+		return emailCodeSigninSessionStruct{}, nil, fmt.Errorf("failed to insert into email_code_signin_session table: %s", err.Error())
 	}
 	if len(userIds) < 1 {
-		return emailCodeSigninStruct{}, nil, errItemNotFound
+		return emailCodeSigninSessionStruct{}, nil, errItemNotFound
 	}
 
-	emailCodeSignin := emailCodeSigninStruct{
+	emailCodeSigninSession := emailCodeSigninSessionStruct{
 		id:         id,
 		userId:     userIds[0],
 		secretHash: secretHash,
@@ -86,21 +84,21 @@ RETURNING user_id`,
 		createdAt:  nowSecondPrecision,
 	}
 
-	return emailCodeSignin, secret, nil
+	return emailCodeSigninSession, secret, nil
 }
 
-func (server *serverStruct) getEmailCodeSignin(emailCodeSigninId string) (emailCodeSigninStruct, error) {
-	emailCodeSignins := []emailCodeSigninStruct{}
+func (server *serverStruct) getEmailCodeSigninSession(emailCodeSigninSessionId string) (emailCodeSigninSessionStruct, error) {
+	emailCodeSigninSessions := []emailCodeSigninSessionStruct{}
 
 	databaseReadConnection, err := server.databaseReadConnectionPool.Take(context.Background())
 	if err != nil {
-		return emailCodeSigninStruct{}, fmt.Errorf("failed to take database read connection: %s", err.Error())
+		return emailCodeSigninSessionStruct{}, fmt.Errorf("failed to take database read connection: %s", err.Error())
 	}
 	err = sqlitex.Execute(
 		databaseReadConnection,
-		"SELECT user_id, secret_hash, email_code, created_at FROM email_code_signin WHERE id = ?",
+		"SELECT user_id, secret_hash, email_code, created_at FROM email_code_signin_session WHERE id = ?",
 		&sqlitex.ExecOptions{
-			Args: []any{emailCodeSigninId},
+			Args: []any{emailCodeSigninSessionId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				userId := stmt.ColumnText(0)
 
@@ -111,37 +109,37 @@ func (server *serverStruct) getEmailCodeSignin(emailCodeSigninId string) (emailC
 
 				createdAt := time.Unix(stmt.ColumnInt64(3), 0)
 
-				emailCodeSignin := emailCodeSigninStruct{
-					id:         emailCodeSigninId,
+				emailCodeSigninSession := emailCodeSigninSessionStruct{
+					id:         emailCodeSigninSessionId,
 					userId:     userId,
 					secretHash: secretHash,
 					emailCode:  emailCode,
 					createdAt:  createdAt,
 				}
 
-				emailCodeSignins = append(emailCodeSignins, emailCodeSignin)
+				emailCodeSigninSessions = append(emailCodeSigninSessions, emailCodeSigninSession)
 				return nil
 			},
 		},
 	)
 	server.databaseReadConnectionPool.Put(databaseReadConnection)
 	if err != nil {
-		return emailCodeSigninStruct{}, fmt.Errorf("failed to select from email_code_signin table: %s", err.Error())
+		return emailCodeSigninSessionStruct{}, fmt.Errorf("failed to select from email_code_signin_session table: %s", err.Error())
 	}
 
-	if len(emailCodeSignins) < 1 {
-		return emailCodeSigninStruct{}, errItemNotFound
+	if len(emailCodeSigninSessions) < 1 {
+		return emailCodeSigninSessionStruct{}, errItemNotFound
 	}
 
-	emailCodeSignin := emailCodeSignins[0]
+	emailCodeSigninSession := emailCodeSigninSessions[0]
 
-	if time.Since(emailCodeSignin.createdAt) >= time.Hour {
-		return emailCodeSigninStruct{}, errItemNotFound
+	if time.Since(emailCodeSigninSession.createdAt) >= time.Hour {
+		return emailCodeSigninSessionStruct{}, errItemNotFound
 	}
-	return emailCodeSignin, nil
+	return emailCodeSigninSession, nil
 }
 
-func (server *serverStruct) getEmailCodeSigninUserEmailAddress(emailCodeSigninId string) (string, error) {
+func (server *serverStruct) getEmailCodeSigninSessionUserEmailAddress(emailCodeSigninSessionId string) (string, error) {
 	userEmailAddresses := []string{}
 
 	databaseReadConnection, err := server.databaseReadConnectionPool.Take(context.Background())
@@ -150,9 +148,9 @@ func (server *serverStruct) getEmailCodeSigninUserEmailAddress(emailCodeSigninId
 	}
 	err = sqlitex.Execute(
 		databaseReadConnection,
-		"SELECT user.email_address FROM email_code_signin INNER JOIN user ON email_code_signin.user_id = user.id WHERE email_code_signin.id = ?",
+		"SELECT user.email_address FROM email_code_signin_session INNER JOIN user ON email_code_signin_session.user_id = user.id WHERE email_code_signin_session.id = ?",
 		&sqlitex.ExecOptions{
-			Args: []any{emailCodeSigninId},
+			Args: []any{emailCodeSigninSessionId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				userEmailAddress := stmt.ColumnText(0)
 
@@ -163,7 +161,7 @@ func (server *serverStruct) getEmailCodeSigninUserEmailAddress(emailCodeSigninId
 	)
 	server.databaseReadConnectionPool.Put(databaseReadConnection)
 	if err != nil {
-		return "", fmt.Errorf("failed to select from email_code_signin table: %s", err.Error())
+		return "", fmt.Errorf("failed to select from email_code_signin_session table: %s", err.Error())
 	}
 
 	if len(userEmailAddresses) < 1 {
@@ -175,91 +173,77 @@ func (server *serverStruct) getEmailCodeSigninUserEmailAddress(emailCodeSigninId
 	return userEmailAddress, nil
 }
 
-var errInvalidEmailCodeSigninToken = errors.New("invalid email code signin token")
+var errInvalidEmailCodeSigninSessionToken = errors.New("invalid email code signin session token")
 
-func (server *serverStruct) validateEmailCodeSigninToken(emailCodeSigninToken string) (emailCodeSigninStruct, error) {
-	tokenParts := strings.Split(emailCodeSigninToken, ".")
-	if len(tokenParts) != 2 {
-		return emailCodeSigninStruct{}, errInvalidEmailCodeSigninToken
-	}
-	emailCodeSigninId := tokenParts[0]
-	encodedSecret := tokenParts[1]
-	secret, err := base64.StdEncoding.DecodeString(encodedSecret)
+func (server *serverStruct) validateEmailCodeSigninSessionToken(emailCodeSigninSessionToken string) (emailCodeSigninSessionStruct, error) {
+	emailCodeSigninSessionId, emailCodeSigninSessionSecret, err := parseSessionToken(emailCodeSigninSessionToken)
 	if err != nil {
-		return emailCodeSigninStruct{}, errInvalidEmailCodeSigninToken
+		return emailCodeSigninSessionStruct{}, errInvalidEmailCodeSigninSessionToken
 	}
 
-	emailCodeSignin, err := server.getEmailCodeSignin(emailCodeSigninId)
+	emailCodeSigninSession, err := server.getEmailCodeSigninSession(emailCodeSigninSessionId)
 	if errors.Is(err, errItemNotFound) {
-		return emailCodeSigninStruct{}, errInvalidEmailCodeSigninToken
+		return emailCodeSigninSessionStruct{}, errInvalidEmailCodeSigninSessionToken
 	}
 	if err != nil {
-		return emailCodeSigninStruct{}, fmt.Errorf("failed to get email code signin: %s", err.Error())
+		return emailCodeSigninSessionStruct{}, fmt.Errorf("failed to get email code signin session: %s", err.Error())
 	}
 
-	secretValid := emailCodeSignin.compareSecretAgainstHash(secret)
+	secretValid := emailCodeSigninSession.compareSecretAgainstHash(emailCodeSigninSessionSecret)
 	if !secretValid {
-		return emailCodeSigninStruct{}, errInvalidEmailCodeSigninToken
+		return emailCodeSigninSessionStruct{}, errInvalidEmailCodeSigninSessionToken
 	}
 
-	return emailCodeSignin, nil
+	return emailCodeSigninSession, nil
 }
 
-const emailCodeSigninTokenCookieName = "email_code_signin_token"
+const emailCodeSigninSessionTokenCookieName = "email_code_signin_session_token"
 
-func (server *serverStruct) setBlankEmailCodeSigninToken(w http.ResponseWriter) {
-	cookie := &http.Cookie{
-		Name:     emailCodeSigninTokenCookieName,
-		Value:    "",
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   -1,
-		Path:     "/",
-		Secure:   server.https(),
-	}
-	http.SetCookie(w, cookie)
-}
-
-func (server *serverStruct) validateRequestEmailCodeSigninToken(r *http.Request) (emailCodeSigninStruct, string, error) {
-	emailCodeSigninTokenCookie, err := r.Cookie(emailCodeSigninTokenCookieName)
+func (server *serverStruct) validateRequestEmailCodeSigninSessionToken(r *http.Request) (emailCodeSigninSessionStruct, string, error) {
+	emailCodeSigninSessionTokenCookie, err := r.Cookie(emailCodeSigninSessionTokenCookieName)
 	if err != nil {
-		return emailCodeSigninStruct{}, "", errInvalidEmailCodeSigninToken
+		return emailCodeSigninSessionStruct{}, "", errInvalidEmailCodeSigninSessionToken
 	}
-	emailCodeSigninToken := emailCodeSigninTokenCookie.Value
+	emailCodeSigninSessionToken := emailCodeSigninSessionTokenCookie.Value
 
-	emailCodeSignin, err := server.validateEmailCodeSigninToken(emailCodeSigninToken)
-	if errors.Is(err, errInvalidEmailCodeSigninToken) {
-		return emailCodeSigninStruct{}, "", errInvalidEmailCodeSigninToken
+	emailCodeSigninSession, err := server.validateEmailCodeSigninSessionToken(emailCodeSigninSessionToken)
+	if errors.Is(err, errInvalidEmailCodeSigninSessionToken) {
+		return emailCodeSigninSessionStruct{}, "", errInvalidEmailCodeSigninSessionToken
 	}
 	if err != nil {
-		return emailCodeSigninStruct{}, "", fmt.Errorf("failed to validate email code signin token: %s", err.Error())
+		return emailCodeSigninSessionStruct{}, "", fmt.Errorf("failed to validate email code signin session token: %s", err.Error())
 	}
 
-	return emailCodeSignin, emailCodeSigninToken, nil
+	return emailCodeSigninSession, emailCodeSigninSessionToken, nil
 }
 
-func (server *serverStruct) completeEmailCodeSignin(emailCodeSigninId string) (sessionStruct, []byte, error) {
+func (server *serverStruct) setBlankEmailCodeSigninSessionToken(w http.ResponseWriter) {
+	server.setBlankSessionTokenCookie(w, emailCodeSigninSessionTokenCookieName)
+}
+
+func (server *serverStruct) completeEmailCodeSigninSession(emailCodeSigninSessionId string) (authSessionStruct, []byte, error) {
 	nowSecondPrecision := getCurrentTimeSecondPrecision()
 
-	sessionId := generateItemId()
-	sessionSecret := generateSessionSecret()
-	sessionSecretHash := hashSessionSecret(sessionSecret)
+	authSessionId := generateItemId()
+	authSessionSecret := generateSessionSecret()
+	authSessionSecretHash := hashSessionSecret(authSessionSecret)
 
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
-		return sessionStruct{}, nil, fmt.Errorf("failed to take database write connection: %s", err.Error())
+		return authSessionStruct{}, nil, fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(databaseWriteConnection, "BEGIN IMMEDIATE", nil)
 	if err != nil {
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		return sessionStruct{}, nil, fmt.Errorf("failed to begin transaction: %s", err.Error())
+		return authSessionStruct{}, nil, fmt.Errorf("failed to begin transaction: %s", err.Error())
 	}
 
 	userIds := []string{}
-	err = sqlitex.Execute(databaseWriteConnection, `INSERT INTO session (id, user_id, secret_hash, created_at)
-SELECT ?, user_id, ?, ? FROM email_code_signin WHERE id = ?
+	err = sqlitex.Execute(databaseWriteConnection, `INSERT INTO auth_session (id, user_id, secret_hash, created_at)
+SELECT ?, user_id, ?, ? FROM email_code_signin_session WHERE id = ?
 RETURNING user_id`, &sqlitex.ExecOptions{
-		Args: []any{sessionId, sessionSecretHash, nowSecondPrecision.Unix(), emailCodeSigninId},
+		Args: []any{authSessionId, authSessionSecretHash, nowSecondPrecision.Unix(), emailCodeSigninSessionId},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			userId := stmt.ColumnText(0)
 			userIds = append(userIds, userId)
@@ -270,34 +254,34 @@ RETURNING user_id`, &sqlitex.ExecOptions{
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 		if rollbackErr != nil {
-			return sessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+			return authSessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
 
 		if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintUnique || sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
-			return sessionStruct{}, nil, errItemConflict
+			return authSessionStruct{}, nil, errItemConflict
 		}
-		return sessionStruct{}, nil, fmt.Errorf("failed to insert into session table: %s", err.Error())
+		return authSessionStruct{}, nil, fmt.Errorf("failed to insert into auth_session table: %s", err.Error())
 	}
 	if len(userIds) < 1 {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 		if rollbackErr != nil {
-			return sessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+			return authSessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
-		return sessionStruct{}, nil, errItemNotFound
+		return authSessionStruct{}, nil, errItemNotFound
 	}
 	userId := userIds[0]
 
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM email_code_signin WHERE id = ?", &sqlitex.ExecOptions{
-		Args: []any{emailCodeSigninId},
+	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM email_code_signin_session WHERE id = ?", &sqlitex.ExecOptions{
+		Args: []any{emailCodeSigninSessionId},
 	})
 	if err != nil {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 		if rollbackErr != nil {
-			return sessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+			return authSessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
-		return sessionStruct{}, nil, fmt.Errorf("failed to delete from emailCodeSignin table: %s", err.Error())
+		return authSessionStruct{}, nil, fmt.Errorf("failed to delete from emailCodeSigninSession table: %s", err.Error())
 	}
 
 	err = sqlitex.Execute(databaseWriteConnection, "COMMIT", nil)
@@ -305,33 +289,33 @@ RETURNING user_id`, &sqlitex.ExecOptions{
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 		if rollbackErr != nil {
-			return sessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
+			return authSessionStruct{}, nil, fmt.Errorf("failed to rollback transaction: %s", rollbackErr.Error())
 		}
-		return sessionStruct{}, nil, fmt.Errorf("failed to commit transaction: %s", err.Error())
+		return authSessionStruct{}, nil, fmt.Errorf("failed to commit transaction: %s", err.Error())
 	}
 
 	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 
-	session := sessionStruct{
-		id:         sessionId,
+	session := authSessionStruct{
+		id:         authSessionId,
 		userId:     userId,
-		secretHash: sessionSecretHash,
+		secretHash: authSessionSecretHash,
 		createdAt:  nowSecondPrecision,
 	}
-	return session, sessionSecret, nil
+	return session, authSessionSecret, nil
 }
 
-func (server *serverStruct) deleteEmailCodeSignin(emailCodeSigninId string) error {
+func (server *serverStruct) deleteEmailCodeSigninSession(emailCodeSigninSessionId string) error {
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
-	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM email_code_signin WHERE id = ?", &sqlitex.ExecOptions{
-		Args: []any{emailCodeSigninId},
+	err = sqlitex.Execute(databaseWriteConnection, "DELETE FROM email_code_signin_session WHERE id = ?", &sqlitex.ExecOptions{
+		Args: []any{emailCodeSigninSessionId},
 	})
 	if err != nil {
 		server.databaseWriteConnectionPool.Put(databaseWriteConnection)
-		return fmt.Errorf("failed to delete from email_code_signin table: %s", err.Error())
+		return fmt.Errorf("failed to delete from email_code_signin_session table: %s", err.Error())
 	}
 	affectedCount := databaseWriteConnection.Changes()
 	server.databaseWriteConnectionPool.Put(databaseWriteConnection)

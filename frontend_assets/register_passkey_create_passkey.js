@@ -1,8 +1,8 @@
 "use strict";
 
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
-const sessionToken = pageDataJSONObject.session_token;
-const passkeyRegistrationToken = pageDataJSONObject.passkey_registration_token;
+const authSessionToken = pageDataJSONObject.auth_session_token;
+const passkeyRegistrationSessionToken = pageDataJSONObject.passkey_registration_session_token;
 const userId = pageDataJSONObject.user_id;
 const userEmailAddress = pageDataJSONObject.user_email_address;
 
@@ -16,7 +16,7 @@ async function handleCreatePasskeyButtonClickEvent(event) {
 	createPasskeyButtonElement.disabled = true;
 
 	let actionValuesJSONObject = {
-		session_token: sessionToken,
+		auth_session_token: authSessionToken,
 	};
 
 	let actionResult;
@@ -30,9 +30,9 @@ async function handleCreatePasskeyButtonClickEvent(event) {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_session_token") {
+		if (actionResult.errorCode === "invalid_auth_session_token") {
 			deleteSessionTokenCookie();
-			deletePasskeyRegistrationTokenCookie();
+			deletePasskeyRegistrationSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/sign-in";
@@ -116,8 +116,8 @@ async function handleCreatePasskeyButtonClickEvent(event) {
 	const authenticatorDataBytes = new Uint8Array(credential.response.getAuthenticatorData());
 
 	actionValuesJSONObject = {
-		session_token: sessionToken,
-		passkey_registration_token: passkeyRegistrationToken,
+		auth_session_token: authSessionToken,
+		passkey_registration_session_token: passkeyRegistrationSessionToken,
 		webauthn_authenticator_data: authenticatorDataBytes.toBase64(),
 	};
 
@@ -134,19 +134,19 @@ async function handleCreatePasskeyButtonClickEvent(event) {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_session_token") {
+		if (actionResult.errorCode === "invalid_auth_session_token") {
 			deleteSessionTokenCookie();
-			deletePasskeyRegistrationTokenCookie();
+			deletePasskeyRegistrationSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/sign-in";
 			return;
 		}
 		if (
-			actionResult.errorCode === "invalid_passkey_registration_token" ||
+			actionResult.errorCode === "invalid_passkey_registration_session_token" ||
 			actionResult.errorCode === "session_mismatch"
 		) {
-			deletePasskeyRegistrationTokenCookie();
+			deletePasskeyRegistrationSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/account";
@@ -176,8 +176,8 @@ async function handleCancelButtonClickEvent(event) {
 	cancelButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
-		session_token: sessionToken,
-		passkey_registration_token: passkeyRegistrationToken,
+		auth_session_token: authSessionToken,
+		passkey_registration_session_token: passkeyRegistrationSessionToken,
 	};
 
 	let actionResult;
@@ -191,19 +191,19 @@ async function handleCancelButtonClickEvent(event) {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_session_token") {
+		if (actionResult.errorCode === "invalid_auth_session_token") {
 			deleteSessionTokenCookie();
-			deletePasskeyRegistrationTokenCookie();
+			deletePasskeyRegistrationSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/sign-in";
 			return;
 		}
 		if (
-			actionResult.errorCode === "invalid_passkey_registration_token" ||
+			actionResult.errorCode === "invalid_passkey_registration_session_token" ||
 			actionResult.errorCode === "session_mismatch"
 		) {
-			deletePasskeyRegistrationTokenCookie();
+			deletePasskeyRegistrationSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/account";
@@ -217,7 +217,7 @@ async function handleCancelButtonClickEvent(event) {
 		return;
 	}
 
-	deletePasskeyRegistrationTokenCookie();
+	deletePasskeyRegistrationSessionTokenCookie();
 
 	window.location.href = "/account";
 }

@@ -1,9 +1,9 @@
 "use strict";
 
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
-const sessionToken = pageDataJSONObject.session_token;
-const identityVerificationToken = pageDataJSONObject.identity_verification_token;
-const identityVerificationPasskeyVerificationChallenge = Uint8Array.fromBase64(
+const authSessionToken = pageDataJSONObject.auth_session_token;
+const identityVerificationSessionToken = pageDataJSONObject.identity_verification_session_token;
+const identityVerificationSessionPasskeyVerificationChallenge = Uint8Array.fromBase64(
 	pageDataJSONObject.identity_verification_passkey_verification_challenge,
 );
 
@@ -25,7 +25,7 @@ async function handleVerifyWithPasskeyButtonClickEvent() {
 	verifyWithPasskeyButtonElement.disabled = true;
 
 	let actionValuesJSONObject = {
-		session_token: sessionToken,
+		auth_session_token: authSessionToken,
 	};
 
 	let actionResult;
@@ -39,9 +39,9 @@ async function handleVerifyWithPasskeyButtonClickEvent() {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_session_token") {
+		if (actionResult.errorCode === "invalid_auth_session_token") {
 			deleteSessionToken();
-			deleteIdentityVerificationTokenCookie();
+			deleteIdentityVerificationSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/sign-in";
@@ -61,7 +61,7 @@ async function handleVerifyWithPasskeyButtonClickEvent() {
 	}
 
 	const publicKeyOptions = {
-		challenge: identityVerificationPasskeyVerificationChallenge,
+		challenge: identityVerificationSessionPasskeyVerificationChallenge,
 		allowCredentials: [],
 		userVerification: "required",
 		timeout: 5 * 60 * 1000,
@@ -90,8 +90,8 @@ async function handleVerifyWithPasskeyButtonClickEvent() {
 	const signature = new Uint8Array(credential.response.signature);
 
 	actionValuesJSONObject = {
-		session_token: sessionToken,
-		identity_verification_token: identityVerificationToken,
+		auth_session_token: authSessionToken,
+		identity_verification_session_token: identityVerificationSessionToken,
 		webauthn_credential_id: credentialId.toBase64(),
 		webauthn_authenticator_data: authenticatorData.toBase64(),
 		webauthn_client_data_json: clientDataJSON.toBase64(),
@@ -111,19 +111,19 @@ async function handleVerifyWithPasskeyButtonClickEvent() {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_session_token") {
+		if (actionResult.errorCode === "invalid_auth_session_token") {
 			deleteSessionToken();
-			deleteIdentityVerificationTokenCookie();
+			deleteIdentityVerificationSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/sign-in";
 			return;
 		}
 		if (
-			actionResult.errorCode === "invalid_identity_verification_token" ||
+			actionResult.errorCode === "invalid_identity_verification_session_token" ||
 			actionResult.errorCode === "session_mismatch"
 		) {
-			deleteIdentityVerificationTokenCookie();
+			deleteIdentityVerificationSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/account";
@@ -148,7 +148,7 @@ async function handleVerifyWithPasskeyButtonClickEvent() {
 
 	const verifiedAction = actionResult.valuesJSONObject.verified_action;
 
-	deleteIdentityVerificationTokenCookie();
+	deleteIdentityVerificationSessionTokenCookie();
 
 	if (verifiedAction === "email_address_update") {
 		window.location.href = "/update-email-address/set-new-email-address";
@@ -170,8 +170,8 @@ async function handleVerifyWithEmailCodeButtonClickEvent() {
 	verifyWithEmailCodeButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
-		session_token: sessionToken,
-		identity_verification_token: identityVerificationToken,
+		auth_session_token: authSessionToken,
+		identity_verification_session_token: identityVerificationSessionToken,
 	};
 
 	let actionResult;
@@ -188,19 +188,19 @@ async function handleVerifyWithEmailCodeButtonClickEvent() {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_session_token") {
+		if (actionResult.errorCode === "invalid_auth_session_token") {
 			deleteSessionToken();
-			deleteIdentityVerificationTokenCookie();
+			deleteIdentityVerificationSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/sign-in";
 			return;
 		}
 		if (
-			actionResult.errorCode === "invalid_identity_verification_token" ||
+			actionResult.errorCode === "invalid_identity_verification_session_token" ||
 			actionResult.errorCode === "session_mismatch"
 		) {
-			deleteIdentityVerificationTokenCookie();
+			deleteIdentityVerificationSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/account";
@@ -225,8 +225,8 @@ async function handleCancelButtonElementClickEvent() {
 	cancelButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
-		session_token: sessionToken,
-		identity_verification_token: identityVerificationToken,
+		auth_session_token: authSessionToken,
+		identity_verification_session_token: identityVerificationSessionToken,
 	};
 
 	let actionResult;
@@ -240,19 +240,19 @@ async function handleCancelButtonElementClickEvent() {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_session_token") {
+		if (actionResult.errorCode === "invalid_auth_session_token") {
 			deleteSessionToken();
-			deleteIdentityVerificationTokenCookie();
+			deleteIdentityVerificationSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/sign-in";
 			return;
 		}
 		if (
-			actionResult.errorCode === "invalid_identity_verification_token" ||
+			actionResult.errorCode === "invalid_identity_verification_session_token" ||
 			actionResult.errorCode === "session_mismatch"
 		) {
-			deleteIdentityVerificationTokenCookie();
+			deleteIdentityVerificationSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/account";
@@ -266,16 +266,16 @@ async function handleCancelButtonElementClickEvent() {
 	}
 
 	const cancelledAction = actionResult.valuesJSONObject.cancelled_action;
-	deleteIdentityVerificationTokenCookie();
+	deleteIdentityVerificationSessionTokenCookie();
 
 	if (cancelledAction === "email_address_update") {
-		deleteEmailAddressUpdateTokenCookie();
+		deleteEmailAddressUpdateSessionTokenCookie();
 	} else if (cancelledAction === "passkey_registration") {
-		deletePasskeyRegistrationTokenCookie();
+		deletePasskeyRegistrationSessionTokenCookie();
 	} else if (cancelledAction === "passkey_deletion") {
-		deletePasskeyDeletionTokenCookie();
+		deletePasskeyDeletionSessionTokenCookie();
 	} else if (cancelledAction === "account_deletion") {
-		deleteAccountDeletionTokenCookie();
+		deleteAccountDeletionSessionTokenCookie();
 	}
 
 	window.location.href = "/account";

@@ -1,7 +1,7 @@
 "use strict";
 
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
-const emailCodeSigninToken = pageDataJSONObject.email_code_signin_token;
+const emailCodeSigninSessionToken = pageDataJSONObject.email_code_signin_session_token;
 
 const verifyEmailCodeFormElement = document.getElementById("verify-email-code-form");
 verifyEmailCodeFormElement.addEventListener("submit", handleVerifyEmailCodeFormSubmitEvent);
@@ -23,7 +23,7 @@ async function handleVerifyEmailCodeFormSubmitEvent(event) {
 	const emailCode = emailCodeInputValue.replaceAll(" ", "").replaceAll("-", "").toUpperCase();
 
 	const actionValuesJSONObject = {
-		email_code_signin_token: emailCodeSigninToken,
+		email_code_signin_session_token: emailCodeSigninSessionToken,
 		email_code: emailCode,
 	};
 
@@ -41,8 +41,8 @@ async function handleVerifyEmailCodeFormSubmitEvent(event) {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_email_code_signin_token") {
-			deleteEmailCodeSigninTokenCookie();
+		if (actionResult.errorCode === "invalid_email_code_signin_session_token") {
+			deleteEmailCodeSigninSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/account";
@@ -65,8 +65,8 @@ async function handleVerifyEmailCodeFormSubmitEvent(event) {
 		return;
 	}
 
-	deleteEmailCodeSigninTokenCookie();
-	setSessionTokenCookie(actionResult.valuesJSONObject.session_token);
+	deleteEmailCodeSigninSessionTokenCookie();
+	setSessionTokenCookie(actionResult.valuesJSONObject.auth_session_token);
 
 	window.location.href = "/account";
 }
@@ -75,7 +75,7 @@ async function handleCancelButtonClickEvent() {
 	cancelButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
-		email_code_signin_token: emailCodeSigninToken,
+		email_code_signin_session_token: emailCodeSigninSessionToken,
 	};
 
 	let actionResult;
@@ -89,8 +89,8 @@ async function handleCancelButtonClickEvent() {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_email_code_signin_token") {
-			deleteEmailCodeSigninTokenCookie();
+		if (actionResult.errorCode === "invalid_email_code_signin_session_token") {
+			deleteEmailCodeSigninSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/account";
@@ -104,7 +104,7 @@ async function handleCancelButtonClickEvent() {
 		return;
 	}
 
-	deleteEmailCodeSigninTokenCookie();
+	deleteEmailCodeSigninSessionTokenCookie();
 
 	window.location.href = "/sign-in";
 }
@@ -113,7 +113,7 @@ async function handleResendEmailCodeButtonClickEvent() {
 	resendEmailCodeButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
-		email_code_signin_token: emailCodeSigninToken,
+		email_code_signin_session_token: emailCodeSigninSessionToken,
 	};
 
 	let actionResult;
@@ -130,8 +130,8 @@ async function handleResendEmailCodeButtonClickEvent() {
 	}
 
 	if (!actionResult.ok) {
-		if (actionResult.errorCode === "invalid_email_code_signin_token") {
-			deleteEmailCodeSigninTokenCookie();
+		if (actionResult.errorCode === "invalid_email_code_signin_session_token") {
+			deleteEmailCodeSigninSessionTokenCookie();
 
 			alert("Your session has expired.");
 			window.location.href = "/account";

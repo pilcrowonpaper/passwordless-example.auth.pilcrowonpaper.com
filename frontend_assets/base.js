@@ -7,68 +7,80 @@ window.addEventListener("pageshow", () => {
 	}
 });
 
-function setSessionTokenCookie(sessionToken) {
-	setCookieWithExpiration("session_token", sessionToken, 86400);
+function setSessionTokenCookie(authSessionToken) {
+	setCookieWithExpiration("auth_session_token", authSessionToken, 86400);
 }
 
 function deleteSessionTokenCookie() {
-	setCookieWithExpiration("session_token", "", 0);
+	setCookieWithExpiration("auth_session_token", "", 0);
 }
 
-function setSignupTokenCookie(signupToken) {
-	setCookieWithExpiration("signup_token", signupToken, 86400);
+function setSignupSessionTokenCookie(signupSessionToken) {
+	setCookieWithExpiration("signup_session_token", signupSessionToken, 86400);
 }
 
-function deleteSignupTokenCookie() {
-	setCookieWithExpiration("signup_token", "", 0);
+function deleteSignupSessionTokenCookie() {
+	setCookieWithExpiration("signup_session_token", "", 0);
 }
 
-function setEmailAddressUpdateTokenCookie(emailAddressUpdateToken) {
-	setCookieWithExpiration("email_address_update_token", emailAddressUpdateToken, 86400);
+function setEmailAddressUpdateSessionTokenCookie(emailAddressUpdateSessionToken) {
+	setCookieWithExpiration(
+		"email_address_update_session_token",
+		emailAddressUpdateSessionToken,
+		86400,
+	);
 }
 
-function deleteEmailAddressUpdateTokenCookie() {
-	setCookieWithExpiration("email_address_update_token", "", 0);
+function deleteEmailAddressUpdateSessionTokenCookie() {
+	setCookieWithExpiration("email_address_update_session_token", "", 0);
 }
 
-function setPasskeyRegistrationTokenCookie(passkeyRegistrationToken) {
-	setCookieWithExpiration("passkey_registration_token", passkeyRegistrationToken, 86400);
+function setPasskeyRegistrationSessionTokenCookie(passkeyRegistrationSessionToken) {
+	setCookieWithExpiration(
+		"passkey_registration_session_token",
+		passkeyRegistrationSessionToken,
+		86400,
+	);
 }
 
-function deletePasskeyRegistrationTokenCookie() {
-	setCookieWithExpiration("passkey_registration_token", "", 0);
+function deletePasskeyRegistrationSessionTokenCookie() {
+	setCookieWithExpiration("passkey_registration_session_token", "", 0);
 }
 
-function setPasskeyDeletionTokenCookie(passkeyDeletionToken) {
-	setCookieWithExpiration("passkey_deletion_token", passkeyDeletionToken, 86400);
+function setPasskeyDeletionSessionTokenCookie(passkeyDeletionSessionToken) {
+	setCookieWithExpiration("passkey_deletion_session_token", passkeyDeletionSessionToken, 86400);
 }
 
-function deletePasskeyDeletionTokenCookie() {
-	setCookieWithExpiration("passkey_deletion_token", "", 0);
+function deletePasskeyDeletionSessionTokenCookie() {
+	setCookieWithExpiration("passkey_deletion_session_token", "", 0);
 }
 
-function setAccountDeletionTokenCookie(accountDeletionToken) {
-	setCookieWithExpiration("account_deletion_token", accountDeletionToken, 86400);
+function setAccountDeletionSessionTokenCookie(accountDeletionSessionToken) {
+	setCookieWithExpiration("account_deletion_session_token", accountDeletionSessionToken, 86400);
 }
 
-function deleteAccountDeletionTokenCookie() {
-	setCookieWithExpiration("account_deletion_token", "", 0);
+function deleteAccountDeletionSessionTokenCookie() {
+	setCookieWithExpiration("account_deletion_session_token", "", 0);
 }
 
-function setIdentityVerificationTokenCookie(identityVerificationToken) {
-	setCookieWithExpiration("identity_verification_token", identityVerificationToken, 86400);
+function setIdentityVerificationSessionTokenCookie(identityVerificationSessionToken) {
+	setCookieWithExpiration(
+		"identity_verification_session_token",
+		identityVerificationSessionToken,
+		86400,
+	);
 }
 
-function deleteIdentityVerificationTokenCookie() {
-	setCookieWithExpiration("identity_verification_token", "", 0);
+function deleteIdentityVerificationSessionTokenCookie() {
+	setCookieWithExpiration("identity_verification_session_token", "", 0);
 }
 
-function setEmailCodeSigninTokenCookie(emailCodeSigninToken) {
-	setCookieWithExpiration("email_code_signin_token", emailCodeSigninToken, 86400);
+function setEmailCodeSigninSessionTokenCookie(emailCodeSigninSessionToken) {
+	setCookieWithExpiration("email_code_signin_session_token", emailCodeSigninSessionToken, 86400);
 }
 
-function deleteEmailCodeSigninTokenCookie() {
-	setCookieWithExpiration("email_code_signin_token", "", 0);
+function deleteEmailCodeSigninSessionTokenCookie() {
+	setCookieWithExpiration("email_code_signin_session_token", "", 0);
 }
 
 function setCookieWithExpiration(name, value, maxAge) {
