@@ -1,8 +1,19 @@
+"use strict";
+
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
 const sessionToken = pageDataJSONObject.session_token;
 const identityVerificationToken = pageDataJSONObject.identity_verification_token;
 
-document.getElementById("verify-email-code-form").addEventListener("submit", async (event) => {
+const verifyEmailCodeFormElement = document.getElementById("verify-email-code-form");
+verifyEmailCodeFormElement.addEventListener("submit", handleVerifyEmailCodeFormSubmitEvent);
+
+const resendEmailCodeButtonElement = document.getElementById("resend-email-code-button");
+resendEmailCodeButtonElement.addEventListener("click", handleResendEmailCodeButtonClickEvent);
+
+const cancelButtonElement = document.getElementById("cancel-button");
+cancelButtonElement.addEventListener("click", handleCancelButtonClickEvent);
+
+async function handleVerifyEmailCodeFormSubmitEvent(event) {
 	event.preventDefault();
 
 	const submitButtonElement = document.getElementById("verify-email-code-form-submit-button");
@@ -17,73 +28,13 @@ document.getElementById("verify-email-code-form").addEventListener("submit", asy
 		identity_verification_token: identityVerificationToken,
 		email_code: emailCode,
 	};
-	const requestBodyJSONObject = {
-		action: "verify_identity_verification_email_code",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
-
-	let verifiedAction;
+	let actionResult;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_session_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/sign-in";
-				return;
-			}
-			if (
-				resultJSONObject.error_code === "invalid_identity_verification_token" ||
-				resultJSONObject.error_code === "session_mismatch"
-			) {
-				if (window.location.protocol === "https:") {
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/account";
-				return;
-			}
-			if (resultJSONObject.error_code === "email_code_not_issued") {
-				alert("Your session has expired.");
-				window.location.href = "/verify-identity";
-				return;
-			}
-			if (resultJSONObject.error_code === "incorrect_email_code") {
-				alert("Incorrect email code.");
-				submitButtonElement.disabled = false;
-				return;
-			}
-			if (resultJSONObject.error_code === "rate_limited") {
-				alert("Too many attempts. Please try again later.");
-				submitButtonElement.disabled = false;
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
-
-		verifiedAction = resultJSONObject.values.verified_action;
+		actionResult = await sendActionRequest(
+			"verify_identity_verification_email_code",
+			actionValuesJSONObject,
+		);
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -91,11 +42,50 @@ document.getElementById("verify-email-code-form").addEventListener("submit", asy
 		return;
 	}
 
-	if (window.location.protocol === "https:") {
-		document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-	} else {
-		document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_session_token") {
+			deleteSessionToken();
+			deleteIdentityVerificationTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/sign-in";
+			return;
+		}
+		if (
+			actionResult.errorCode === "invalid_identity_verification_token" ||
+			actionResult.errorCode === "session_mismatch"
+		) {
+			deleteIdentityVerificationTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/account";
+			return;
+		}
+		if (actionResult.errorCode === "email_code_not_issued") {
+			alert("Your session has expired.");
+			window.location.href = "/verify-identity";
+			return;
+		}
+		if (actionResult.errorCode === "incorrect_email_code") {
+			alert("Incorrect email code.");
+			submitButtonElement.disabled = false;
+			return;
+		}
+		if (actionResult.errorCode === "rate_limited") {
+			alert("Too many attempts. Please try again later.");
+			submitButtonElement.disabled = false;
+			return;
+		}
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		submitButtonElement.disabled = false;
+		return;
 	}
+
+	const verifiedAction = actionResult.valuesJSONObject.verified_action;
+
+	deleteIdentityVerificationTokenCookie();
 
 	if (verifiedAction === "email_address_update") {
 		window.location.href = "/update-email-address/set-new-email-address";
@@ -111,77 +101,59 @@ document.getElementById("verify-email-code-form").addEventListener("submit", asy
 		submitButtonElement.disabled = false;
 		return;
 	}
-});
+}
 
-const resendEmailCodeButtonElement = document.getElementById("resend-email-code-button");
-
-resendEmailCodeButtonElement.addEventListener("click", async () => {
+async function handleResendEmailCodeButtonClickEvent() {
 	resendEmailCodeButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
 		session_token: sessionToken,
 		identity_verification_token: identityVerificationToken,
 	};
-	const requestBodyJSONObject = {
-		action: "send_identity_verification_email_code",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
-
+	let actionResult;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_session_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/sign-in";
-				return;
-			}
-			if (
-				resultJSONObject.error_code === "invalid_identity_verification_token" ||
-				resultJSONObject.error_code === "session_mismatch"
-			) {
-				if (window.location.protocol === "https:") {
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/account";
-				return;
-			}
-			if (resultJSONObject.error_code === "rate_limited") {
-				alert("Too many attempts. Please try again later.");
-				resendEmailCodeButtonElement.disabled = false;
-				return;
-			}
-			if (resultJSONObject.error_code === "email_code_not_issued") {
-				alert("Your session has expired.");
-				window.location.href = "/verify-identity";
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
+		actionResult = await sendActionRequest(
+			"send_identity_verification_email_code",
+			actionValuesJSONObject,
+		);
 	} catch (error) {
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		resendEmailCodeButtonElement.disabled = false;
+		return;
+	}
+
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_session_token") {
+			deleteSessionToken();
+			deleteIdentityVerificationTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/sign-in";
+			return;
+		}
+		if (
+			actionResult.errorCode === "invalid_identity_verification_token" ||
+			actionResult.errorCode === "session_mismatch"
+		) {
+			deleteIdentityVerificationTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/account";
+			return;
+		}
+		if (actionResult.errorCode === "rate_limited") {
+			alert("Too many attempts. Please try again later.");
+			resendEmailCodeButtonElement.disabled = false;
+			return;
+		}
+		if (actionResult.errorCode === "email_code_not_issued") {
+			alert("Your session has expired.");
+			window.location.href = "/verify-identity";
+			return;
+		}
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
 		resendEmailCodeButtonElement.disabled = false;
@@ -190,71 +162,22 @@ resendEmailCodeButtonElement.addEventListener("click", async () => {
 
 	alert("We've sent another email to your inbox.");
 	resendEmailCodeButtonElement.disabled = false;
-});
+}
 
-const cancelButtonElement = document.getElementById("cancel-button");
-
-cancelButtonElement.addEventListener("click", async () => {
+async function handleCancelButtonClickEvent() {
 	cancelButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
 		session_token: sessionToken,
 		identity_verification_token: identityVerificationToken,
 	};
-	const requestBodyJSONObject = {
-		action: "revoke_identity_verification_email_code",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
-
+	let actionResult;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_session_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/sign-in";
-				return;
-			}
-			if (
-				resultJSONObject.error_code === "invalid_identity_verification_token" ||
-				resultJSONObject.error_code === "session_mismatch"
-			) {
-				if (window.location.protocol === "https:") {
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/account";
-				return;
-			}
-			if (resultJSONObject.error_code === "email_code_not_issued") {
-				alert("Your session has expired.");
-				window.location.href = "/verify-identity";
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
+		actionResult = await sendActionRequest(
+			"revoke_identity_verification_email_code",
+			actionValuesJSONObject,
+		);
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -262,5 +185,36 @@ cancelButtonElement.addEventListener("click", async () => {
 		return;
 	}
 
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_session_token") {
+			deleteSessionToken();
+			deleteIdentityVerificationTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/sign-in";
+			return;
+		}
+		if (
+			actionResult.errorCode === "invalid_identity_verification_token" ||
+			actionResult.errorCode === "session_mismatch"
+		) {
+			deleteIdentityVerificationTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/account";
+			return;
+		}
+		if (actionResult.errorCode === "email_code_not_issued") {
+			alert("Your session has expired.");
+			window.location.href = "/verify-identity";
+			return;
+		}
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		cancelButtonElement.disabled = false;
+		return;
+	}
+
 	window.location.href = "/verify-identity";
-});
+}

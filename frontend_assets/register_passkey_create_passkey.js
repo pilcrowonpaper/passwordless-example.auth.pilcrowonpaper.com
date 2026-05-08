@@ -1,3 +1,5 @@
+"use strict";
+
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
 const sessionToken = pageDataJSONObject.session_token;
 const passkeyRegistrationToken = pageDataJSONObject.passkey_registration_token;
@@ -5,55 +7,47 @@ const userId = pageDataJSONObject.user_id;
 const userEmailAddress = pageDataJSONObject.user_email_address;
 
 const createPasskeyButtonElement = document.getElementById("create-passkey-button");
-createPasskeyButtonElement.addEventListener("click", async () => {
+createPasskeyButtonElement.addEventListener("click", handleCreatePasskeyButtonClickEvent);
+
+const cancelButtonElement = document.getElementById("cancel-button");
+cancelButtonElement.addEventListener("click", handleCancelButtonClickEvent);
+
+async function handleCreatePasskeyButtonClickEvent(event) {
 	createPasskeyButtonElement.disabled = true;
 
-	const getWebauthnCredentialIdsActionValuesJSONObject = {
+	let actionValuesJSONObject = {
 		session_token: sessionToken,
 	};
-	const getWebauthnCredentialIdsActionRequestBodyJSONObject = {
-		action: "get_webauthn_credential_ids",
-		values: getWebauthnCredentialIdsActionValuesJSONObject,
-	};
 
-	const getWebauthnCredentialIdsActionRequest = new Request("/action", {
-		method: "POST",
-		body: JSON.stringify(getWebauthnCredentialIdsActionRequestBodyJSONObject),
-	});
-	getWebauthnCredentialIdsActionRequest.headers.set("Content-Type", "application/json");
-
-	const webauthnCredentialIds = [];
+	let actionResult;
 	try {
-		const response = await fetch(getWebauthnCredentialIdsActionRequest);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_session_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
-					document.cookie = `identity_verification_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-				alert("Your session has expired.");
-				window.location.href = "/sign-in";
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
-
-		for (const encodedWebauthnCredentialId of resultJSONObject.values.webauthn_credential_ids) {
-			webauthnCredentialIds.push(Uint8Array.fromBase64(encodedWebauthnCredentialId));
-		}
-	} catch (e) {
+		actionResult = await sendActionRequest("get_webauthn_credential_ids", actionValuesJSONObject);
+	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
 		createPasskeyButtonElement.disabled = false;
 		return;
+	}
+
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_session_token") {
+			deleteSessionTokenCookie();
+			deletePasskeyRegistrationTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/sign-in";
+			return;
+		}
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		createPasskeyButtonElement.disabled = false;
+		return;
+	}
+
+	const webauthnCredentialIds = [];
+	for (const encodedWebauthnCredentialId of actionResult.valuesJSONObject.webauthn_credential_ids) {
+		webauthnCredentialIds.push(Uint8Array.fromBase64(encodedWebauthnCredentialId));
 	}
 
 	const publicKeyOptions = {
@@ -123,71 +117,17 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 
 	const authenticatorDataBytes = new Uint8Array(credential.response.getAuthenticatorData());
 
-	const setPasskeyRegistrationPasskeyWebauthnCredenialActionValuesJSONObject = {
+	actionValuesJSONObject = {
 		session_token: sessionToken,
 		passkey_registration_token: passkeyRegistrationToken,
 		webauthn_authenticator_data: authenticatorDataBytes.toBase64(),
 	};
-	const setPasskeyRegistrationPasskeyWebauthnCredenialActionRequestBodyJSONObject = {
-		action: "set_passkey_registration_passkey_webauthn_credential",
-		values: setPasskeyRegistrationPasskeyWebauthnCredenialActionValuesJSONObject,
-	};
-	const setPasskeyRegistrationPasskeyWebauthnCredenialActionRequest = new Request("/action", {
-		method: "POST",
-		body: JSON.stringify(setPasskeyRegistrationPasskeyWebauthnCredenialActionRequestBodyJSONObject),
-	});
-	setPasskeyRegistrationPasskeyWebauthnCredenialActionRequest.headers.set(
-		"Content-Type",
-		"application/json",
-	);
 
 	try {
-		const response = await fetch(setPasskeyRegistrationPasskeyWebauthnCredenialActionRequest);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_session_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
-					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/sign-in";
-				return;
-			}
-			if (
-				resultJSONObject.error_code === "invalid_passkey_registration_token" ||
-				resultJSONObject.error_code === "session_mismatch"
-			) {
-				if (window.location.protocol === "https:") {
-					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/account";
-				return;
-			}
-			if (resultJSONObject.error_code === "invalid_or_unsupported_public_key") {
-				alert("This device is not supported.");
-				createPasskeyButtonElement.disabled = false;
-				return;
-			}
-			if (resultJSONObject.error_code === "rate_limited") {
-				alert("Too many attempts. Please try again later.");
-				createPasskeyButtonElement.disabled = false;
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
+		actionResult = await sendActionRequest(
+			"set_passkey_registration_passkey_webauthn_credential",
+			actionValuesJSONObject,
+		);
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -195,66 +135,56 @@ createPasskeyButtonElement.addEventListener("click", async () => {
 		return;
 	}
 
-	window.location.href = "/register-passkey/set-passkey-name";
-});
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_session_token") {
+			deleteSessionTokenCookie();
+			deletePasskeyRegistrationTokenCookie();
 
-const cancelButtonElement = document.getElementById("cancel-button");
-cancelButtonElement.addEventListener("click", async () => {
+			alert("Your session has expired.");
+			window.location.href = "/sign-in";
+			return;
+		}
+		if (
+			actionResult.errorCode === "invalid_passkey_registration_token" ||
+			actionResult.errorCode === "session_mismatch"
+		) {
+			deletePasskeyRegistrationTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/account";
+			return;
+		}
+		if (actionResult.errorCode === "invalid_or_unsupported_public_key") {
+			alert("This device is not supported.");
+			createPasskeyButtonElement.disabled = false;
+			return;
+		}
+		if (actionResult.errorCode === "rate_limited") {
+			alert("Too many attempts. Please try again later.");
+			createPasskeyButtonElement.disabled = false;
+			return;
+		}
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		createPasskeyButtonElement.disabled = false;
+		return;
+	}
+
+	window.location.href = "/register-passkey/set-passkey-name";
+}
+
+async function handleCancelButtonClickEvent(event) {
 	cancelButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
 		session_token: sessionToken,
 		passkey_registration_token: passkeyRegistrationToken,
 	};
-	const requestBodyJSONObject = {
-		action: "cancel_passkey_registration",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
-
+	let actionResult;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_session_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
-					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/sign-in";
-				return;
-			}
-			if (
-				resultJSONObject.error_code === "invalid_passkey_registration_token" ||
-				resultJSONObject.error_code === "session_mismatch"
-			) {
-				if (window.location.protocol === "https:") {
-					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/account";
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
+		actionResult = await sendActionRequest("cancel_passkey_registration", actionValuesJSONObject);
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -262,11 +192,34 @@ cancelButtonElement.addEventListener("click", async () => {
 		return;
 	}
 
-	if (window.location.protocol === "https:") {
-		document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-	} else {
-		document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_session_token") {
+			deleteSessionTokenCookie();
+			deletePasskeyRegistrationTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/sign-in";
+			return;
+		}
+		if (
+			actionResult.errorCode === "invalid_passkey_registration_token" ||
+			actionResult.errorCode === "session_mismatch"
+		) {
+			deletePasskeyRegistrationTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/account";
+			return;
+		}
+
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		cancelButtonElement.disabled = false;
+		return;
 	}
 
+	deletePasskeyRegistrationTokenCookie();
+
 	window.location.href = "/account";
-});
+}

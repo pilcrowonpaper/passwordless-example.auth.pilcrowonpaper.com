@@ -1,8 +1,13 @@
+"use strict";
+
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
 const sessionToken = pageDataJSONObject.session_token;
 const passkeyRegistrationToken = pageDataJSONObject.passkey_registration_token;
 
-document.getElementById("set-passkey-name-form").addEventListener("submit", async (event) => {
+const setPasskeyNameFormElement = document.getElementById("set-passkey-name-form");
+setPasskeyNameFormElement.addEventListener("submit", handleSetPasskeyNameFormSubmitEvent);
+
+async function handleSetPasskeyNameFormSubmitEvent(event) {
 	event.preventDefault();
 
 	const submitButtonElement = document.getElementById("set-passkey-name-form-submit-button");
@@ -16,65 +21,13 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 		passkey_registration_token: passkeyRegistrationToken,
 		passkey_name: passkeyName,
 	};
-	const requestBodyJSONObject = {
-		action: "set_passkey_registration_passkey_name",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
-
+	let actionResult;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_session_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
-					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/sign-in";
-				return;
-			}
-			if (
-				resultJSONObject.error_code === "invalid_passkey_registration_token" ||
-				resultJSONObject.error_code === "session_mismatch"
-			) {
-				if (window.location.protocol === "https:") {
-					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/account";
-				return;
-			}
-			if (resultJSONObject.error_code === "invalid_passkey_name") {
-				alert("Please enter a valid passkey name.");
-				submitButtonElement.disabled = false;
-				return;
-			}
-			if (resultJSONObject.error_code === "passkey_limit_reached") {
-				alert("Passkey limit reached.");
-				submitButtonElement.disabled = false;
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
+		actionResult = await sendActionRequest(
+			"set_passkey_registration_passkey_name",
+			actionValuesJSONObject,
+		);
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -82,11 +35,46 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 		return;
 	}
 
-	if (window.location.protocol === "https:") {
-		document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-	} else {
-		document.cookie = `passkey_registration_token=; Max-Age=0; SameSite=Lax; Path=/`;
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_session_token") {
+			deleteSessionTokenCookie();
+			deletePasskeyRegistrationTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/sign-in";
+			return;
+		}
+		if (
+			actionResult.errorCode === "invalid_passkey_registration_token" ||
+			actionResult.errorCode === "session_mismatch"
+		) {
+			deletePasskeyRegistrationTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/account";
+			return;
+		}
+		if (actionResult.errorCode === "invalid_passkey_name") {
+			alert("Please enter a valid passkey name.");
+			submitButtonElement.disabled = false;
+			return;
+		}
+		if (actionResult.errorCode === "passkey_limit_reached") {
+			deletePasskeyRegistrationTokenCookie();
+
+			alert("Passkey limit reached.");
+			window.location.href = "/account";
+			return;
+		}
+
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		submitButtonElement.disabled = false;
+		return;
 	}
 
+	deletePasskeyRegistrationTokenCookie();
+
 	window.location.href = "/account";
-});
+}

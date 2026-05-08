@@ -1,56 +1,41 @@
+"use strict";
+
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
 const sessionToken = pageDataJSONObject.session_token;
 
 const updateEmailAddressButtonElement = document.getElementById("update-email-address-button");
-updateEmailAddressButtonElement.addEventListener("click", async () => {
+updateEmailAddressButtonElement.addEventListener("click", handleUpdateEmailAddressButtonClickEvent);
+
+const deletePasskeyButtonElements = document.getElementsByClassName("delete-passkey-button");
+for (const deletePasskeyButtonElement of deletePasskeyButtonElements) {
+	deletePasskeyButtonElement.addEventListener("click", handleDeletePasskeyButtonClickEvent);
+}
+
+const registerPasskeyButtonElement = document.getElementById("register-passkey-button");
+if (registerPasskeyButtonElement !== null) {
+	registerPasskeyButtonElement.addEventListener("click", handleRegisterPasskeyButtonClickEvent);
+}
+
+const signOutButtonElement = document.getElementById("sign-out-button");
+signOutButtonElement.addEventListener("click", handleSignOutButtonClickEvent);
+
+const signOutAllDevicesButtonElement = document.getElementById("sign-out-all-devices-button");
+
+signOutAllDevicesButtonElement.addEventListener("click", handleSignOutAllDevicesButtonClickEvent);
+
+const deleteAccountButtonElement = document.getElementById("delete-account-button");
+deleteAccountButtonElement.addEventListener("click", handleDeleteAccountButtonClickEvent);
+
+async function handleUpdateEmailAddressButtonClickEvent() {
 	updateEmailAddressButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
 		session_token: sessionToken,
 	};
-	const requestBodyJSONObject = {
-		action: "start_email_address_update",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
-
-	let emailAddressUpdateToken;
-	let identityVerificationToken;
+	let actionResult;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_session_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/sign-in";
-				return;
-			}
-			if (resultJSONObject.error_code === "rate_limited") {
-				alert("Too many attempts. Please try again later.");
-				updateEmailAddressButtonElement.disabled = false;
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
-
-		emailAddressUpdateToken = resultJSONObject.values.email_address_update_token;
-		identityVerificationToken = resultJSONObject.values.identity_verification_token;
+		actionResult = await sendActionRequest("start_email_address_update", actionValuesJSONObject);
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -58,210 +43,136 @@ updateEmailAddressButtonElement.addEventListener("click", async () => {
 		return;
 	}
 
-	if (window.location.protocol === "https:") {
-		document.cookie = `email_address_update_token=${emailAddressUpdateToken}; Max-Age=4800; SameSite=Lax; Path=/; Secure`;
-		document.cookie = `identity_verification_token=${identityVerificationToken}; Max-Age=3600; SameSite=Lax; Path=/; Secure`;
-	} else {
-		document.cookie = `email_address_update_token=${emailAddressUpdateToken}; Max-Age=4800; SameSite=Lax; Path=/;`;
-		document.cookie = `identity_verification_token=${identityVerificationToken}; Max-Age=3600; SameSite=Lax; Path=/;`;
-	}
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_session_token") {
+			deleteSessionToken();
 
-	window.location.href = "/verify-identity";
-});
-
-const deletePasskeyButtonElements = document.getElementsByClassName("delete-passkey-button");
-for (const deletePasskeyButtonElement of deletePasskeyButtonElements) {
-	deletePasskeyButtonElement.addEventListener("click", async () => {
-		const passkeyId = deletePasskeyButtonElement.getAttribute("data-passkey-id");
-
-		deletePasskeyButtonElement.disabled = true;
-
-		const actionValuesJSONObject = {
-			session_token: sessionToken,
-			passkey_id: passkeyId,
-		};
-		const requestBodyJSONObject = {
-			action: "start_passkey_deletion",
-			values: actionValuesJSONObject,
-		};
-		const requestBody = JSON.stringify(requestBodyJSONObject);
-
-		const request = new Request("/action", {
-			method: "POST",
-			body: requestBody,
-		});
-		request.headers.set("Content-Type", "application/json");
-
-		let passkeyDeletionToken;
-		let identityVerificationToken;
-		try {
-			const response = await fetch(request);
-			if (!response.ok) {
-				await response.body.cancel();
-				throw new Error(`Unexpected response status code ${response.status}`);
-			}
-			const resultJSONObject = await response.json();
-			if (!resultJSONObject.ok) {
-				if (resultJSONObject.error_code === "invalid_session_token") {
-					if (window.location.protocol === "https:") {
-						document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-					} else {
-						document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
-					}
-
-					alert("Your session has expired.");
-					window.location.href = "/sign-in";
-					return;
-				}
-				if (resultJSONObject.error_code === "rate_limited") {
-					alert("Too many attempts. Please try again later.");
-					deletePasskeyButtonElement.disabled = false;
-					return;
-				}
-				throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-			}
-
-			passkeyDeletionToken = resultJSONObject.values.passkey_deletion_token;
-			identityVerificationToken = resultJSONObject.values.identity_verification_token;
-		} catch (error) {
-			console.error(error);
-			alert("An unexpected error occurred. Please try again.");
-			deletePasskeyButtonElement.disabled = false;
+			alert("Your session has expired.");
+			window.location.href = "/sign-in";
 			return;
 		}
-
-		if (window.location.protocol === "https:") {
-			document.cookie = `passkey_deletion_token=${passkeyDeletionToken}; Max-Age=4800; SameSite=Lax; Path=/; Secure`;
-			document.cookie = `identity_verification_token=${identityVerificationToken}; Max-Age=3600; SameSite=Lax; Path=/; Secure`;
-		} else {
-			document.cookie = `passkey_deletion_token=${passkeyDeletionToken}; Max-Age=4800; SameSite=Lax; Path=/;`;
-			document.cookie = `identity_verification_token=${identityVerificationToken}; Max-Age=3600; SameSite=Lax; Path=/;`;
+		if (actionResult.errorCode === "rate_limited") {
+			alert("Too many attempts. Please try again later.");
+			updateEmailAddressButtonElement.disabled = false;
+			return;
 		}
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		updateEmailAddressButtonElement.disabled = false;
+		return;
+	}
 
-		window.location.href = "/verify-identity";
-	});
+	setEmailAddressUpdateTokenCookie(actionResult.valuesJSONObject.email_address_update_token);
+	setIdentityVerificationTokenCookie(actionResult.valuesJSONObject.identity_verification_token);
+
+	window.location.href = "/verify-identity";
 }
 
-const registerPasskeyButtonElement = document.getElementById("register-passkey-button");
-if (registerPasskeyButtonElement !== null) {
-	registerPasskeyButtonElement.addEventListener("click", async () => {
-		registerPasskeyButtonElement.disabled = true;
+async function handleDeletePasskeyButtonClickEvent(event) {
+	const passkeyId = event.target.getAttribute("data-passkey-id");
 
-		const actionValuesJSONObject = {
-			session_token: sessionToken,
-		};
-		const requestBodyJSONObject = {
-			action: "start_passkey_registration",
-			values: actionValuesJSONObject,
-		};
-		const requestBody = JSON.stringify(requestBodyJSONObject);
+	event.target.disabled = true;
 
-		const request = new Request("/action", {
-			method: "POST",
-			body: requestBody,
-		});
-		request.headers.set("Content-Type", "application/json");
+	const actionValuesJSONObject = {
+		session_token: sessionToken,
+		passkey_id: passkeyId,
+	};
 
-		let passkeyRegistrationToken;
-		let identityVerificationToken;
-		try {
-			const response = await fetch(request);
-			if (!response.ok) {
-				await response.body.cancel();
-				throw new Error(`Unexpected response status code ${response.status}`);
-			}
-			const resultJSONObject = await response.json();
-			if (!resultJSONObject.ok) {
-				if (resultJSONObject.error_code === "invalid_session_token") {
-					if (window.location.protocol === "https:") {
-						document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-					} else {
-						document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
-					}
+	let actionResult;
+	try {
+		actionResult = await sendActionRequest("start_passkey_deletion", actionValuesJSONObject);
+	} catch (error) {
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		event.target.disabled = false;
+		return;
+	}
 
-					alert("Your session has expired.");
-					window.location.href = "/sign-in";
-					return;
-				}
-				if (resultJSONObject.error_code === "passkey_limit_reached") {
-					alert("Passkey limit reached.");
-					registerPasskeyButtonElement.disabled = false;
-					return;
-				}
-				if (resultJSONObject.error_code === "rate_limited") {
-					alert("Too many attempts. Please try again later.");
-					registerPasskeyButtonElement.disabled = false;
-					return;
-				}
-				throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-			}
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_session_token") {
+			deleteSessionTokenCookie();
 
-			passkeyRegistrationToken = resultJSONObject.values.passkey_registration_token;
-			identityVerificationToken = resultJSONObject.values.identity_verification_token;
-		} catch (error) {
-			console.error(error);
-			alert("An unexpected error occurred. Please try again.");
+			alert("Your session has expired.");
+			window.location.href = "/sign-in";
+			return;
+		}
+		if (actionResult.errorCode === "rate_limited") {
+			alert("Too many attempts. Please try again later.");
+			event.target.disabled = false;
+			return;
+		}
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		event.target.disabled = false;
+		return;
+	}
+
+	setPasskeyDeletionTokenCookie(actionResult.valuesJSONObject.passkey_deletion_token);
+	setIdentityVerificationTokenCookie(actionResult.valuesJSONObject.identity_verification_token);
+
+	window.location.href = "/verify-identity";
+}
+
+async function handleRegisterPasskeyButtonClickEvent() {
+	registerPasskeyButtonElement.disabled = true;
+
+	const actionValuesJSONObject = {
+		session_token: sessionToken,
+	};
+
+	let actionResult;
+	try {
+		actionResult = await sendActionRequest("start_passkey_registration", actionValuesJSONObject);
+	} catch (error) {
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		registerPasskeyButtonElement.disabled = false;
+		return;
+	}
+
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_session_token") {
+			deleteSessionTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/sign-in";
+			return;
+		}
+		if (actionResult.errorCode === "passkey_limit_reached") {
+			alert("Passkey limit reached.");
 			registerPasskeyButtonElement.disabled = false;
 			return;
 		}
-
-		if (window.location.protocol === "https:") {
-			document.cookie = `passkey_registration_token=${passkeyRegistrationToken}; Max-Age=4800; SameSite=Lax; Path=/; Secure`;
-			document.cookie = `identity_verification_token=${identityVerificationToken}; Max-Age=3600; SameSite=Lax; Path=/; Secure`;
-		} else {
-			document.cookie = `passkey_registration_token=${passkeyRegistrationToken}; Max-Age=4800; SameSite=Lax; Path=/;`;
-			document.cookie = `identity_verification_token=${identityVerificationToken}; Max-Age=3600; SameSite=Lax; Path=/;`;
+		if (actionResult.errorCode === "rate_limited") {
+			alert("Too many attempts. Please try again later.");
+			registerPasskeyButtonElement.disabled = false;
+			return;
 		}
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		registerPasskeyButtonElement.disabled = false;
+		return;
+	}
 
-		window.location.href = "/verify-identity";
-	});
+	setPasskeyRegistrationTokenCookie(actionResult.valuesJSONObject.passkey_registration_token);
+	setIdentityVerificationTokenCookie(actionResult.valuesJSONObject.identity_verification_token);
+
+	window.location.href = "/verify-identity";
 }
 
-const signOutButtonElement = document.getElementById("sign-out-button");
-signOutButtonElement.addEventListener("click", async () => {
+async function handleSignOutButtonClickEvent() {
 	signOutButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
 		session_token: sessionToken,
 	};
-	const requestBodyJSONObject = {
-		action: "sign_out",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
-
+	let actionResult;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_session_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/sign-in";
-				return;
-			}
-			if (resultJSONObject.error_code === "rate_limited") {
-				alert("Too many attempts. Please try again later.");
-				signOutButtonElement.disabled = false;
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
+		actionResult = await sendActionRequest("sign_out", actionValuesJSONObject);
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -269,18 +180,32 @@ signOutButtonElement.addEventListener("click", async () => {
 		return;
 	}
 
-	if (window.location.protocol === "https:") {
-		document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-	} else {
-		document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_session_token") {
+			deleteSessionTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/sign-in";
+			return;
+		}
+		if (actionResult.errorCode === "rate_limited") {
+			alert("Too many attempts. Please try again later.");
+			signOutButtonElement.disabled = false;
+			return;
+		}
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		signOutButtonElement.disabled = false;
+		return;
 	}
 
+	deleteSessionTokenCookie();
+
 	window.location.href = "/sign-in";
-});
+}
 
-const signOutAllDevicesButtonElement = document.getElementById("sign-out-all-devices-button");
-
-signOutAllDevicesButtonElement.addEventListener("click", async () => {
+async function handleSignOutAllDevicesButtonClickEvent() {
 	const confirmed = confirm("Do you want to sign out of all devices?");
 	if (!confirmed) {
 		return;
@@ -291,44 +216,10 @@ signOutAllDevicesButtonElement.addEventListener("click", async () => {
 	const actionValuesJSONObject = {
 		session_token: sessionToken,
 	};
-	const requestBodyJSONObject = {
-		action: "sign_out_all_devices",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
-
+	let actionResult;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_session_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/sign-in";
-				return;
-			}
-			if (resultJSONObject.error_code === "rate_limited") {
-				alert("Too many attempts. Please try again later.");
-				signOutAllDevicesButtonElement.disabled = false;
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
+		actionResult = await sendActionRequest("sign_out_all_devices", actionValuesJSONObject);
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -336,65 +227,44 @@ signOutAllDevicesButtonElement.addEventListener("click", async () => {
 		return;
 	}
 
-	if (window.location.protocol === "https:") {
-		document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-	} else {
-		document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_session_token") {
+			deleteSessionTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/sign-in";
+			return;
+		}
+
+		if (actionResult.errorCode === "rate_limited") {
+			alert("Too many attempts. Please try again later.");
+			signOutAllDevicesButtonElement.disabled = false;
+			return;
+		}
+
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+
+		alert("An unexpected error occurred. Please try again.");
+		signOutAllDevicesButtonElement.disabled = false;
+		return;
 	}
 
-	window.location.href = "/sign-in";
-});
+	deleteSessionTokenCookie();
 
-const deleteAccountButtonElement = document.getElementById("delete-account-button");
-deleteAccountButtonElement.addEventListener("click", async () => {
+	window.location.href = "/sign-in";
+}
+
+async function handleDeleteAccountButtonClickEvent() {
 	deleteAccountButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
 		session_token: sessionToken,
 	};
-	const requestBodyJSONObject = {
-		action: "start_account_deletion",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
-
-	let accountDeletionToken;
-	let identityVerificationToken;
+	let actionResult;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_session_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `session_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/sign-in";
-				return;
-			}
-			if (resultJSONObject.error_code === "rate_limited") {
-				alert("Too many attempts. Please try again later.");
-				deleteAccountButtonElement.disabled = false;
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
-
-		accountDeletionToken = resultJSONObject.values.account_deletion_token;
-		identityVerificationToken = resultJSONObject.values.identity_verification_token;
+		actionResult = await sendActionRequest("start_account_deletion", actionValuesJSONObject);
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -402,13 +272,28 @@ deleteAccountButtonElement.addEventListener("click", async () => {
 		return;
 	}
 
-	if (window.location.protocol === "https:") {
-		document.cookie = `account_deletion_token=${accountDeletionToken}; Max-Age=4800; SameSite=Lax; Path=/; Secure`;
-		document.cookie = `identity_verification_token=${identityVerificationToken}; Max-Age=3600; SameSite=Lax; Path=/; Secure`;
-	} else {
-		document.cookie = `account_deletion_token=${accountDeletionToken}; Max-Age=4800; SameSite=Lax; Path=/;`;
-		document.cookie = `identity_verification_token=${identityVerificationToken}; Max-Age=3600; SameSite=Lax; Path=/;`;
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_session_token") {
+			deleteSessionTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/sign-in";
+			return;
+		}
+		if (actionResult.errorCode === "rate_limited") {
+			alert("Too many attempts. Please try again later.");
+			deleteAccountButtonElement.disabled = false;
+			return;
+		}
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		deleteAccountButtonElement.disabled = false;
+		return;
 	}
 
+	setAccountDeletionTokenCookie(actionResult.valuesJSONObject.account_deletion_token);
+	setIdentityVerificationTokenCookie(actionResult.valuesJSONObject.identity_verification_token);
+
 	window.location.href = "/verify-identity";
-});
+}

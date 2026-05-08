@@ -1,7 +1,18 @@
+"use strict";
+
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
 const emailCodeSigninToken = pageDataJSONObject.email_code_signin_token;
 
-document.getElementById("verify-email-code-form").addEventListener("submit", async (event) => {
+const verifyEmailCodeFormElement = document.getElementById("verify-email-code-form");
+verifyEmailCodeFormElement.addEventListener("submit", handleVerifyEmailCodeFormSubmitEvent);
+
+const resendEmailCodeButtonElement = document.getElementById("resend-email-code-button");
+resendEmailCodeButtonElement.addEventListener("click", handleResendEmailCodeButtonClickEvent);
+
+const cancelButtonElement = document.getElementById("cancel-button");
+cancelButtonElement.addEventListener("click", handleCancelButtonClickEvent);
+
+async function handleVerifyEmailCodeFormSubmitEvent(event) {
 	event.preventDefault();
 
 	const submitButtonElement = document.getElementById("verify-email-code-form-submit-button");
@@ -15,52 +26,13 @@ document.getElementById("verify-email-code-form").addEventListener("submit", asy
 		email_code_signin_token: emailCodeSigninToken,
 		email_code: emailCode,
 	};
-	const requestBodyJSONObject = {
-		action: "verify_email_code_signin_email_code",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
-
-	let sessionToken;
+	let actionResult;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_email_code_signin_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `email_code_signin_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `email_code_signin_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/account";
-				return;
-			}
-			if (resultJSONObject.error_code === "incorrect_email_code") {
-				alert("Incorrect email code.");
-				submitButtonElement.disabled = false;
-				return;
-			}
-			if (resultJSONObject.error_code === "rate_limited") {
-				alert("Too many attempts. Please try again later.");
-				submitButtonElement.disabled = false;
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
-
-		sessionToken = resultJSONObject.values.session_token;
+		actionResult = await sendActionRequest(
+			"verify_email_code_signin_email_code",
+			actionValuesJSONObject,
+		);
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -68,58 +40,47 @@ document.getElementById("verify-email-code-form").addEventListener("submit", asy
 		return;
 	}
 
-	if (window.location.protocol === "https:") {
-		document.cookie = `email_code_signin_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/; Secure`;
-	} else {
-		document.cookie = `email_code_signin_token=; Max-Age=0; SameSite=Lax; Path=/`;
-		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/`;
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_email_code_signin_token") {
+			deleteEmailCodeSigninTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/account";
+			return;
+		}
+		if (actionResult.errorCode === "incorrect_email_code") {
+			alert("Incorrect email code.");
+			submitButtonElement.disabled = false;
+			return;
+		}
+		if (actionResult.errorCode === "rate_limited") {
+			alert("Too many attempts. Please try again later.");
+			submitButtonElement.disabled = false;
+			return;
+		}
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		submitButtonElement.disabled = false;
+		return;
 	}
 
+	deleteEmailCodeSigninTokenCookie();
+	setSessionTokenCookie(actionResult.valuesJSONObject.session_token);
+
 	window.location.href = "/account";
-});
+}
 
-const cancelButtonElement = document.getElementById("cancel-button");
-
-cancelButtonElement.addEventListener("click", async () => {
+async function handleCancelButtonClickEvent() {
 	cancelButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
 		email_code_signin_token: emailCodeSigninToken,
 	};
-	const requestBodyJSONObject = {
-		action: "cancel_email_code_signin",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
-
+	let actionResult;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_email_code_signin_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `email_code_signin_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `email_code_signin_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/account";
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
+		actionResult = await sendActionRequest("cancel_email_code_signin", actionValuesJSONObject);
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -127,56 +88,62 @@ cancelButtonElement.addEventListener("click", async () => {
 		return;
 	}
 
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_email_code_signin_token") {
+			deleteEmailCodeSigninTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/account";
+			return;
+		}
+
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		cancelButtonElement.disabled = false;
+		return;
+	}
+
+	deleteEmailCodeSigninTokenCookie();
+
 	window.location.href = "/sign-in";
-});
+}
 
-const resendEmailCodeButtonElement = document.getElementById("resend-email-code-button");
-
-resendEmailCodeButtonElement.addEventListener("click", async () => {
+async function handleResendEmailCodeButtonClickEvent() {
 	resendEmailCodeButtonElement.disabled = true;
 
 	const actionValuesJSONObject = {
 		email_code_signin_token: emailCodeSigninToken,
 	};
-	const requestBodyJSONObject = {
-		action: "send_email_code_signin_email_code",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
-
+	let actionResult;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_email_code_signin_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `email_code_signin_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `email_code_signin_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/account";
-				return;
-			}
-			if (resultJSONObject.error_code === "rate_limited") {
-				alert("Too many attempts. Please try again later.");
-				resendEmailCodeButtonElement.disabled = false;
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
+		actionResult = await sendActionRequest(
+			"send_email_code_signin_email_code",
+			actionValuesJSONObject,
+		);
 	} catch (error) {
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		resendEmailCodeButtonElement.disabled = false;
+		return;
+	}
+
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_email_code_signin_token") {
+			deleteEmailCodeSigninTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/account";
+			return;
+		}
+		if (actionResult.errorCode === "rate_limited") {
+			alert("Too many attempts. Please try again later.");
+			resendEmailCodeButtonElement.disabled = false;
+			return;
+		}
+
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
 		resendEmailCodeButtonElement.disabled = false;
@@ -185,4 +152,4 @@ resendEmailCodeButtonElement.addEventListener("click", async () => {
 
 	alert("We've sent another email to your inbox.");
 	resendEmailCodeButtonElement.disabled = false;
-});
+}

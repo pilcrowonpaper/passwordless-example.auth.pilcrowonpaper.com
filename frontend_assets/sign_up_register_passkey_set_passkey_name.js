@@ -1,7 +1,12 @@
+"use strict";
+
 const pageDataJSONObject = JSON.parse(document.getElementById("data").innerText);
 const signupToken = pageDataJSONObject.signup_token;
 
-document.getElementById("set-passkey-name-form").addEventListener("submit", async (event) => {
+const setPasskeyNameFormElement = document.getElementById("set-passkey-name-form");
+setPasskeyNameFormElement.addEventListener("submit", handleSetPasskeyNameFormSubmitEvent);
+
+async function handleSetPasskeyNameFormSubmitEvent(event) {
 	event.preventDefault();
 
 	const submitButtonElement = document.getElementById("set-passkey-name-form-submit-button");
@@ -14,58 +19,10 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 		signup_token: signupToken,
 		passkey_name: passkeyName,
 	};
-	const requestBodyJSONObject = {
-		action: "set_signup_passkey_name",
-		values: actionValuesJSONObject,
-	};
-	const requestBody = JSON.stringify(requestBodyJSONObject);
 
-	const request = new Request("/action", {
-		method: "POST",
-		body: requestBody,
-	});
-	request.headers.set("Content-Type", "application/json");
-
-	let sessionToken;
+	let actionResult;
 	try {
-		const response = await fetch(request);
-		if (!response.ok) {
-			await response.body.cancel();
-			throw new Error(`Unexpected response status code ${response.status}`);
-		}
-		const resultJSONObject = await response.json();
-		if (!resultJSONObject.ok) {
-			if (resultJSONObject.error_code === "invalid_signup_token") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("Your session has expired.");
-				window.location.href = "/sign-up";
-				return;
-			}
-			if (resultJSONObject.error_code === "invalid_passkey_name") {
-				alert("Please enter a valid passkey name.");
-				submitButtonElement.disabled = false;
-				return;
-			}
-			if (resultJSONObject.error_code === "email_address_already_used") {
-				if (window.location.protocol === "https:") {
-					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-				} else {
-					document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
-				}
-
-				alert("This email address is already linked to an existing account.");
-				window.location.href = "/sign-up";
-				return;
-			}
-			throw new Error(`Unexpected error code ${resultJSONObject.error_code}`);
-		}
-
-		sessionToken = resultJSONObject.values.session_token;
+		actionResult = await sendActionRequest("set_signup_passkey_name", actionValuesJSONObject);
 	} catch (error) {
 		console.error(error);
 		alert("An unexpected error occurred. Please try again.");
@@ -73,13 +30,35 @@ document.getElementById("set-passkey-name-form").addEventListener("submit", asyn
 		return;
 	}
 
-	if (window.location.protocol === "https:") {
-		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/; Secure`;
-		document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/; Secure`;
-	} else {
-		document.cookie = `session_token=${sessionToken}; Max-Age=86400; SameSite=Lax; Path=/`;
-		document.cookie = `signup_token=; Max-Age=0; SameSite=Lax; Path=/`;
+	if (!actionResult.ok) {
+		if (actionResult.errorCode === "invalid_signup_token") {
+			deleteSignupTokenCookie();
+
+			alert("Your session has expired.");
+			window.location.href = "/sign-up";
+			return;
+		}
+		if (actionResult.errorCode === "invalid_passkey_name") {
+			alert("Please enter a valid passkey name.");
+			submitButtonElement.disabled = false;
+			return;
+		}
+		if (actionResult.errorCode === "email_address_already_used") {
+			deleteSignupTokenCookie();
+
+			alert("This email address is already linked to an existing account.");
+			window.location.href = "/sign-up";
+			return;
+		}
+		const error = new Error(`Unexpected error code ${actionResult.errorCode}`);
+		console.error(error);
+		alert("An unexpected error occurred. Please try again.");
+		submitButtonElement.disabled = false;
+		return;
 	}
 
+	deleteSignupTokenCookie();
+	setSessionTokenCookie(actionResult.valuesJSONObject.session_token);
+
 	window.location.href = "/account";
-});
+}
