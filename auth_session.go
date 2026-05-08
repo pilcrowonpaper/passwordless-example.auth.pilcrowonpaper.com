@@ -24,12 +24,6 @@ func (authSession *authSessionStruct) compareSecretAgainstHash(secret []byte) bo
 	return hashEqual
 }
 
-const authSessionTokenCookieName = "auth_session_token"
-
-func (server *serverStruct) setBlankAuthSessionTokenCookie(w http.ResponseWriter) {
-	server.setBlankSessionTokenCookie(w, authSessionTokenCookieName)
-}
-
 func (server *serverStruct) getAuthSession(authSessionId string) (authSessionStruct, error) {
 	authSessions := []authSessionStruct{}
 
@@ -98,6 +92,8 @@ func (server *serverStruct) validateAuthSessionToken(authSessionToken string) (a
 	return authSession, nil
 }
 
+const authSessionTokenCookieName = "auth_session_token"
+
 func (server *serverStruct) validateRequestAuthSessionToken(r *http.Request) (authSessionStruct, string, error) {
 	authSessionTokenCookie, err := r.Cookie(authSessionTokenCookieName)
 	if err != nil {
@@ -114,6 +110,10 @@ func (server *serverStruct) validateRequestAuthSessionToken(r *http.Request) (au
 	}
 
 	return authSession, authSessionToken, nil
+}
+
+func (server *serverStruct) setBlankAuthSessionTokenCookie(w http.ResponseWriter) {
+	server.setBlankSessionTokenCookie(w, authSessionTokenCookieName)
 }
 
 func (server *serverStruct) deleteAuthSession(authSessionId string) error {
