@@ -103,9 +103,7 @@ async function handleCreatePasskeyButtonClickEvent(event) {
 			return;
 		}
 		if (error.name === "InvalidStateError") {
-			alert(
-				"A passkey managed by your device, password manager, or security key is already registered.",
-			);
+			alert("A passkey is already saved using your device, password manager, or security key.");
 			createPasskeyButtonElement.disabled = false;
 			return;
 		}
