@@ -20,7 +20,7 @@ import (
 func verifyCOSEPublicKey(cosePublicKey []byte) (int, error) {
 	// We dont' have to fully parse the CBOR because:
 	// 1. The CTAP 2.1 canonical CBOR encoding ensures a strict map field order.
-	// 2. The WebAuthn specification states that only required fields for the algorithm are included.
+	// 2. The WebAuthn specification states that only the fields required by the algorithm should be included.
 
 	if len(cosePublicKey) < 1 {
 		return 0, fmt.Errorf("invalid major type")
@@ -35,6 +35,7 @@ func verifyCOSEPublicKey(cosePublicKey []byte) (int, error) {
 	if mapSize < 1 {
 		return 0, fmt.Errorf("invalid map size")
 	}
+
 	if len(cosePublicKey) > 2 && cosePublicKey[1] == 0x01 && cosePublicKey[2] == 0x01 {
 		if mapSize < 2 || len(cosePublicKey) < 5 || cosePublicKey[3] != 0x03 || cosePublicKey[4] != 0x27 {
 			return 0, fmt.Errorf("expected algorithm of eddsa")
@@ -54,6 +55,7 @@ func verifyCOSEPublicKey(cosePublicKey []byte) (int, error) {
 
 		return 42, nil
 	}
+
 	if len(cosePublicKey) > 2 && cosePublicKey[1] == 0x01 && cosePublicKey[2] == 0x02 {
 		if mapSize < 2 || len(cosePublicKey) < 5 || cosePublicKey[3] != 0x03 || cosePublicKey[4] != 0x26 {
 			return 0, fmt.Errorf("expected algorithm of es256")
@@ -89,6 +91,7 @@ func verifyCOSEPublicKey(cosePublicKey []byte) (int, error) {
 
 		return 77, nil
 	}
+
 	if len(cosePublicKey) > 2 && cosePublicKey[1] == 0x01 && cosePublicKey[2] == 0x03 {
 		if mapSize < 2 || len(cosePublicKey) < 7 || cosePublicKey[3] != 0x03 || cosePublicKey[4] != 0x39 || cosePublicKey[5] != 0x01 || cosePublicKey[6] != 0x00 {
 			return 0, fmt.Errorf("expected algorithm of rs256")
@@ -103,8 +106,9 @@ func verifyCOSEPublicKey(cosePublicKey []byte) (int, error) {
 		if cosePublicKey[7] != 0x20 || cosePublicKey[8] != 0x59 || cosePublicKey[9] != 0x01 || cosePublicKey[10] != 0x00 {
 			return 0, fmt.Errorf("expected n to be a 256-byte binary string")
 		}
-		n := new(big.Int)
-		n.SetBytes(cosePublicKey[11:267])
+		if cosePublicKey[11]>>7 != 1 {
+			return 0, fmt.Errorf("expected n to be 2048 bit")
+		}
 		// TODO: Support other public exponents?
 		if cosePublicKey[267] != 0x21 || cosePublicKey[268] != 0x43 || cosePublicKey[269] != 0x01 || cosePublicKey[270] != 0x00 || cosePublicKey[271] != 0x01 {
 			return 0, fmt.Errorf("expected e of 65537")
@@ -130,6 +134,7 @@ func VerifyAssertionSignatureWithCOSEPublicKey(cosePublicKey []byte, signature [
 	if mapSize < 1 {
 		return false, fmt.Errorf("invalid map size")
 	}
+
 	if len(cosePublicKey) > 2 && cosePublicKey[1] == 0x01 && cosePublicKey[2] == 0x01 {
 		if mapSize < 2 || len(cosePublicKey) < 5 || cosePublicKey[3] != 0x03 || cosePublicKey[4] != 0x27 {
 			return false, fmt.Errorf("expected algorithm of eddsa")
@@ -152,6 +157,7 @@ func VerifyAssertionSignatureWithCOSEPublicKey(cosePublicKey []byte, signature [
 
 		return signatureValid, nil
 	}
+
 	if len(cosePublicKey) > 2 && cosePublicKey[1] == 0x01 && cosePublicKey[2] == 0x02 {
 		if mapSize < 2 || len(cosePublicKey) < 5 || cosePublicKey[3] != 0x03 || cosePublicKey[4] != 0x26 {
 			return false, fmt.Errorf("expected algorithm of es256")
@@ -184,6 +190,7 @@ func VerifyAssertionSignatureWithCOSEPublicKey(cosePublicKey []byte, signature [
 
 		return signatureValid, nil
 	}
+
 	if len(cosePublicKey) > 2 && cosePublicKey[1] == 0x01 && cosePublicKey[2] == 0x03 {
 		if mapSize < 2 || len(cosePublicKey) < 7 || cosePublicKey[3] != 0x03 || cosePublicKey[4] != 0x39 || cosePublicKey[5] != 0x01 || cosePublicKey[6] != 0x00 {
 			return false, fmt.Errorf("expected algorithm of rs256")
@@ -200,6 +207,9 @@ func VerifyAssertionSignatureWithCOSEPublicKey(cosePublicKey []byte, signature [
 		}
 		n := new(big.Int)
 		n.SetBytes(cosePublicKey[11:267])
+		if n.BitLen() != 2048 {
+			return false, fmt.Errorf("expected n to be 2048 bits")
+		}
 		// TODO: Support other public exponents?
 		if cosePublicKey[267] != 0x21 || cosePublicKey[268] != 0x43 || cosePublicKey[269] != 0x01 || cosePublicKey[270] != 0x00 || cosePublicKey[271] != 0x01 {
 			return false, fmt.Errorf("expected e of 65537")
