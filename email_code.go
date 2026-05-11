@@ -13,7 +13,7 @@ func generateEmailCode() string {
 }
 
 func formatEmailCode(code string) string {
-	stringBytes := make([]byte, 19)
+	stringBytes := make([]byte, 9)
 	stringBytes[0] = code[0]
 	stringBytes[1] = code[1]
 	stringBytes[2] = code[2]
