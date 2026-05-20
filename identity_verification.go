@@ -18,16 +18,11 @@ type identityVerificationSessionStruct struct {
 	verifyingAction              string
 	verifyingActionId            string
 	passkeyVerificationChallenge []byte
-	emailCodeDefined             bool
-	emailCode                    string
+	emailCodeHashDefined         bool
+	emailCodeHash                []byte
+	emailCodeSaltDefined         bool
+	emailCodeSalt                []byte
 	createdAt                    time.Time
-}
-
-func (identityVerificationSession *identityVerificationSessionStruct) compareEmailCode(emailCode string) bool {
-	if !identityVerificationSession.emailCodeDefined {
-		return false
-	}
-	return constantTimeCompareStrings(emailCode, identityVerificationSession.emailCode)
 }
 
 const (
@@ -52,7 +47,7 @@ func (server *serverStruct) getIdentityVerificationSession(identityVerificationS
 	}
 	err = sqlitex.Execute(
 		databaseReadConnection,
-		"SELECT auth_session_id, secret_hash, verifying_action, verifying_action_id, passkey_verification_challenge, email_code, created_at FROM identity_verification_session WHERE id = ?",
+		"SELECT auth_session_id, secret_hash, verifying_action, verifying_action_id, passkey_verification_challenge, email_code_hash, email_code_salt, created_at FROM identity_verification_session WHERE id = ?",
 		&sqlitex.ExecOptions{
 			Args: []any{identityVerificationSessionId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -68,14 +63,23 @@ func (server *serverStruct) getIdentityVerificationSession(identityVerificationS
 				passkeyVerificationChallenge := make([]byte, stmt.ColumnLen(4))
 				stmt.ColumnBytes(4, passkeyVerificationChallenge)
 
-				emailCodeDefined := false
-				var emailCode string
+				emailCodeHashDefined := false
+				var emailCodeHash []byte
 				if !stmt.ColumnIsNull(5) {
-					emailCodeDefined = true
-					emailCode = stmt.ColumnText(5)
+					emailCodeHashDefined = true
+					emailCodeHash = make([]byte, stmt.ColumnLen(5))
+					stmt.ColumnBytes(5, emailCodeHash)
 				}
 
-				createdAt := time.Unix(stmt.ColumnInt64(6), 0)
+				emailCodeSaltDefined := false
+				var emailCodeSalt []byte
+				if !stmt.ColumnIsNull(6) {
+					emailCodeSaltDefined = true
+					emailCodeSalt = make([]byte, stmt.ColumnLen(6))
+					stmt.ColumnBytes(6, emailCodeSalt)
+				}
+
+				createdAt := time.Unix(stmt.ColumnInt64(7), 0)
 
 				identityVerificationSession := identityVerificationSessionStruct{
 					id:                           identityVerificationSessionId,
@@ -84,8 +88,10 @@ func (server *serverStruct) getIdentityVerificationSession(identityVerificationS
 					verifyingAction:              verifyingAction,
 					verifyingActionId:            verifyingActionId,
 					passkeyVerificationChallenge: passkeyVerificationChallenge,
-					emailCodeDefined:             emailCodeDefined,
-					emailCode:                    emailCode,
+					emailCodeHashDefined:         emailCodeHashDefined,
+					emailCodeHash:                emailCodeHash,
+					emailCodeSaltDefined:         emailCodeSaltDefined,
+					emailCodeSalt:                emailCodeSalt,
 					createdAt:                    createdAt,
 				}
 
@@ -198,6 +204,8 @@ func (server *serverStruct) setBlankIdentityVerificationSessionTokenCookie(w htt
 
 func (server *serverStruct) issueIdentityVerificationSessionEmailCode(identityVerificationSessionId string) (string, string, error) {
 	emailCode := generateEmailCode()
+	emailCodeSalt := generateHashingSalt()
+	emailCodeHash := server.hashEmailCode(emailCode, emailCodeSalt)
 
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
@@ -245,8 +253,8 @@ WHERE identity_verification_session.id = ?`,
 	}
 	userEmailAddress := userEmailAddresses[0]
 
-	err = sqlitex.Execute(databaseWriteConnection, "UPDATE identity_verification_session SET email_code = ? WHERE id = ?", &sqlitex.ExecOptions{
-		Args: []any{emailCode, identityVerificationSessionId},
+	err = sqlitex.Execute(databaseWriteConnection, "UPDATE identity_verification_session SET email_code_hash = ?, email_code_salt = ? WHERE id = ?", &sqlitex.ExecOptions{
+		Args: []any{emailCodeHash, emailCodeSalt, identityVerificationSessionId},
 	})
 	if err != nil {
 		rollbackErr := sqlitex.Execute(databaseWriteConnection, "ROLLBACK", nil)
@@ -278,7 +286,7 @@ func (server *serverStruct) revokeIdentityVerificationSessionEmailCode(identityV
 	if err != nil {
 		return fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
-	err = sqlitex.Execute(databaseWriteConnection, "UPDATE identity_verification_session SET email_code = NULL WHERE id = ?", &sqlitex.ExecOptions{
+	err = sqlitex.Execute(databaseWriteConnection, "UPDATE identity_verification_session SET email_code_hash = NULL, email_code_salt = NULL WHERE id = ?", &sqlitex.ExecOptions{
 		Args: []any{identityVerificationSessionId},
 	})
 	if err != nil {

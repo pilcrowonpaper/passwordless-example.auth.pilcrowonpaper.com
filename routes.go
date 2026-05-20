@@ -387,23 +387,6 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	if actionName == actionSendEmailCodeSigninEmailCode {
-		emailCodeSigninSessionToken, err := values.GetString("email_code_signin_session_token")
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		errorCode := server.sendEmailCodeSigninEmailCodeAction(requestId, clientIPAddress, emailCodeSigninSessionToken)
-		if errorCode != "" {
-			server.logActionErrorResult(requestId, clientIPAddress, actionSendEmailCodeSigninEmailCode, errorCode)
-			writeActionErrorResult(w, requestId, errorCode)
-			return
-		}
-		server.logActionSuccessResult(requestId, clientIPAddress, actionSendEmailCodeSigninEmailCode)
-		writeActionSuccessResult(w, requestId, "{}")
-		return
-	}
-
 	if actionName == actionVerifyEmailCodeSigninEmailCode {
 		emailCodeSigninSessionToken, err := values.GetString("email_code_signin_session_token")
 		if err != nil {
@@ -639,34 +622,6 @@ func (server *serverStruct) actionRoute(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 		server.logActionSuccessResult(requestId, clientIPAddress, actionRevokeIdentityVerificationEmailCode)
-
-		writeActionSuccessResult(w, requestId, "{}")
-		return
-	}
-
-	if actionName == actionSendIdentityVerificationEmailCode {
-		sessionToken, err := values.GetString("auth_session_token")
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		identityVerificationSessionToken, err := values.GetString("identity_verification_session_token")
-		if err != nil {
-			w.WriteHeader(400)
-			return
-		}
-		errorCode := server.sendIdentityVerificationEmailCodeAction(
-			requestId,
-			clientIPAddress,
-			sessionToken,
-			identityVerificationSessionToken,
-		)
-		if errorCode != "" {
-			server.logActionErrorResult(requestId, clientIPAddress, actionSendIdentityVerificationEmailCode, errorCode)
-			writeActionErrorResult(w, requestId, errorCode)
-			return
-		}
-		server.logActionSuccessResult(requestId, clientIPAddress, actionSendIdentityVerificationEmailCode)
 
 		writeActionSuccessResult(w, requestId, "{}")
 		return
@@ -1601,10 +1556,7 @@ func (server *serverStruct) signInVerifyEmailCodePageRoute(w http.ResponseWriter
 	<input id="verify-email-code-form-email-code-input" name="email_code" autocomplete="one-time-code" required/>
 	<button id="verify-email-code-form-submit-button">Continue</button>
 </form>
-<div id="controls">
-	<button id="resend-email-code-button" class="link-button">Resend email code</button>
-	<button id="cancel-button" class="link-button">Cancel</button>
-</div`
+<button id="cancel-button" class="link-button">Cancel</button>`
 
 	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(userEmailAddress))
 
@@ -1745,9 +1697,19 @@ func (server *serverStruct) verifyIdentityVerifyEmailCodePageRoute(w http.Respon
 		return
 	}
 
-	if !identityVerificationSession.emailCodeDefined {
+	if !identityVerificationSession.emailCodeHashDefined {
 		w.Header().Set("Location", "/verify-identity")
 		w.WriteHeader(303)
+		return
+	}
+
+	if !identityVerificationSession.emailCodeSaltDefined {
+		errorMessage := "identity verification session email code salt not defined"
+		server.logRouteInternalError(requestId, clientIPAddress, routeVerifyIdentityVerifyEmailCodePage, errorMessage)
+
+		server.setBlankIdentityVerificationSessionTokenCookie(w)
+		pageHTML := createUnexpectedErrorErrorPageHTML(requestId)
+		writePageHTMLResponse(w, 500, pageHTML)
 		return
 	}
 
@@ -1775,10 +1737,7 @@ func (server *serverStruct) verifyIdentityVerifyEmailCodePageRoute(w http.Respon
 	<input id="verify-email-code-form-email-code-input" name="email_code" autocomplete="one-time-code" required/>
 	<button id="verify-email-code-form-submit-button">Continue</button>
 </form>
-<div id="controls">
-	<button id="resend-email-code-button" class="link-button">Resend email code</button>
-	<button id="cancel-button" class="link-button">Cancel</button>
-</div>`
+<button id="cancel-button" class="link-button">Cancel</button>`
 
 	bodyHTML := fmt.Sprintf(bodyHTMLTemplate, html.EscapeString(userEmailAddress))
 

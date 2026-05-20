@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base32"
+
+	"golang.org/x/crypto/argon2"
 )
 
 func generateEmailCode() string {
@@ -10,6 +13,13 @@ func generateEmailCode() string {
 	rand.Read(emailCodeBytes)
 	emailCode := base32.NewEncoding("ABCDEFGHJKLMNPQRSTUVWXYZ23456789").EncodeToString(emailCodeBytes)
 	return emailCode
+}
+
+func (server *serverStruct) hashEmailCode(emailCode string, salt []byte) []byte {
+	server.cpuIntensiveSemaphore.Acquire(context.Background(), 1)
+	emailCodeHash := argon2.IDKey([]byte(emailCode), salt, 1, 16*1024, 3, 32)
+	server.cpuIntensiveSemaphore.Release(1)
+	return emailCodeHash
 }
 
 func formatEmailCode(code string) string {

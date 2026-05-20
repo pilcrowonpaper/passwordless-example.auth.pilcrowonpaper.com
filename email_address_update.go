@@ -382,7 +382,7 @@ RETURNING id`,
 
 	err = sqlitex.Execute(
 		databaseWriteConnection,
-		"UPDATE identity_verification_session SET email_code = NULL FROM auth_session WHERE identity_verification_session.auth_session_id = auth_session.id AND auth_session.user_id = ?",
+		"UPDATE identity_verification_session SET email_code_hash = NULL, email_code_salt = NULL FROM auth_session WHERE identity_verification_session.auth_session_id = auth_session.id AND auth_session.user_id = ?",
 		&sqlitex.ExecOptions{
 			Args: []any{userId},
 		},

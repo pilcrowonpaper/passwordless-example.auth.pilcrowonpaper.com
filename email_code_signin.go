@@ -12,11 +12,12 @@ import (
 )
 
 type emailCodeSigninSessionStruct struct {
-	id         string
-	userId     string
-	secretHash []byte
-	emailCode  string
-	createdAt  time.Time
+	id            string
+	userId        string
+	secretHash    []byte
+	emailCodeHash []byte
+	emailCodeSalt []byte
+	createdAt     time.Time
 }
 
 func (emailCodeSigninSession *emailCodeSigninSessionStruct) compareSecretAgainstHash(secret []byte) bool {
@@ -25,11 +26,7 @@ func (emailCodeSigninSession *emailCodeSigninSessionStruct) compareSecretAgainst
 	return hashEqual
 }
 
-func (emailCodeSigninSession *emailCodeSigninSessionStruct) compareEmailCode(emailCode string) bool {
-	return constantTimeCompareStrings(emailCode, emailCodeSigninSession.emailCode)
-}
-
-func (server *serverStruct) createEmailCodeSigninSessionFromUserEmailAddress(userEmailAddress string) (emailCodeSigninSessionStruct, []byte, error) {
+func (server *serverStruct) createEmailCodeSigninSessionFromUserEmailAddress(userEmailAddress string) (emailCodeSigninSessionStruct, []byte, string, error) {
 	nowSecondPrecision := getCurrentTimeSecondPrecision()
 
 	id := generateItemId()
@@ -38,23 +35,26 @@ func (server *serverStruct) createEmailCodeSigninSessionFromUserEmailAddress(use
 	secretHash := hashSessionSecret(secret)
 
 	emailCode := generateEmailCode()
+	emailCodeSalt := generateHashingSalt()
+	emailCodeHash := server.hashEmailCode(emailCode, emailCodeSalt)
 
 	userIds := []string{}
 	databaseWriteConnection, err := server.databaseWriteConnectionPool.Take(context.Background())
 	if err != nil {
-		return emailCodeSigninSessionStruct{}, nil, fmt.Errorf("failed to take database write connection: %s", err.Error())
+		return emailCodeSigninSessionStruct{}, nil, "", fmt.Errorf("failed to take database write connection: %s", err.Error())
 	}
 	err = sqlitex.Execute(
 		databaseWriteConnection,
-		`INSERT INTO email_code_signin_session (id, user_id, secret_hash, email_code, created_at)
-SELECT ?, user.id, ?, ?, ? FROM user
+		`INSERT INTO email_code_signin_session (id, user_id, secret_hash, email_code_hash, email_code_salt, created_at)
+SELECT ?, user.id, ?, ?, ?, ? FROM user
 WHERE user.email_address = ?
 RETURNING user_id`,
 		&sqlitex.ExecOptions{
 			Args: []any{
 				id,
 				secretHash,
-				emailCode,
+				emailCodeHash,
+				emailCodeSalt,
 				nowSecondPrecision.Unix(),
 				userEmailAddress,
 			},
@@ -67,24 +67,25 @@ RETURNING user_id`,
 	)
 	server.databaseWriteConnectionPool.Put(databaseWriteConnection)
 	if sqlite.ErrCode(err).ToPrimary() == sqlite.ResultConstraintForeignKey {
-		return emailCodeSigninSessionStruct{}, nil, errItemConflict
+		return emailCodeSigninSessionStruct{}, nil, "", errItemConflict
 	}
 	if err != nil {
-		return emailCodeSigninSessionStruct{}, nil, fmt.Errorf("failed to insert into email_code_signin_session table: %s", err.Error())
+		return emailCodeSigninSessionStruct{}, nil, "", fmt.Errorf("failed to insert into email_code_signin_session table: %s", err.Error())
 	}
 	if len(userIds) < 1 {
-		return emailCodeSigninSessionStruct{}, nil, errItemNotFound
+		return emailCodeSigninSessionStruct{}, nil, "", errItemNotFound
 	}
 
 	emailCodeSigninSession := emailCodeSigninSessionStruct{
-		id:         id,
-		userId:     userIds[0],
-		secretHash: secretHash,
-		emailCode:  emailCode,
-		createdAt:  nowSecondPrecision,
+		id:            id,
+		userId:        userIds[0],
+		secretHash:    secretHash,
+		emailCodeHash: emailCodeHash,
+		emailCodeSalt: emailCodeSalt,
+		createdAt:     nowSecondPrecision,
 	}
 
-	return emailCodeSigninSession, secret, nil
+	return emailCodeSigninSession, secret, emailCode, nil
 }
 
 func (server *serverStruct) getEmailCodeSigninSession(emailCodeSigninSessionId string) (emailCodeSigninSessionStruct, error) {
@@ -96,7 +97,7 @@ func (server *serverStruct) getEmailCodeSigninSession(emailCodeSigninSessionId s
 	}
 	err = sqlitex.Execute(
 		databaseReadConnection,
-		"SELECT user_id, secret_hash, email_code, created_at FROM email_code_signin_session WHERE id = ?",
+		"SELECT user_id, secret_hash, email_code_hash, email_code_salt, created_at FROM email_code_signin_session WHERE id = ?",
 		&sqlitex.ExecOptions{
 			Args: []any{emailCodeSigninSessionId},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -105,16 +106,21 @@ func (server *serverStruct) getEmailCodeSigninSession(emailCodeSigninSessionId s
 				secretHash := make([]byte, stmt.ColumnLen(1))
 				stmt.ColumnBytes(1, secretHash)
 
-				emailCode := stmt.ColumnText(2)
+				emailCodeHash := make([]byte, stmt.ColumnLen(2))
+				stmt.ColumnBytes(2, emailCodeHash)
 
-				createdAt := time.Unix(stmt.ColumnInt64(3), 0)
+				emailCodeSalt := make([]byte, stmt.ColumnLen(3))
+				stmt.ColumnBytes(3, emailCodeSalt)
+
+				createdAt := time.Unix(stmt.ColumnInt64(4), 0)
 
 				emailCodeSigninSession := emailCodeSigninSessionStruct{
-					id:         emailCodeSigninSessionId,
-					userId:     userId,
-					secretHash: secretHash,
-					emailCode:  emailCode,
-					createdAt:  createdAt,
+					id:            emailCodeSigninSessionId,
+					userId:        userId,
+					secretHash:    secretHash,
+					emailCodeHash: emailCodeHash,
+					emailCodeSalt: emailCodeSalt,
+					createdAt:     createdAt,
 				}
 
 				emailCodeSigninSessions = append(emailCodeSigninSessions, emailCodeSigninSession)

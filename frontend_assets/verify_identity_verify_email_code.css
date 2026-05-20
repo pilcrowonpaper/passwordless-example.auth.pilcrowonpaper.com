@@ -1,7 +1,3 @@
-#controls {
-	display: flex;
-	place-items: center;
-	gap: 1rem;
+#cancel-button {
 	margin-top: 1.5rem;
-	flex-wrap: wrap;
 }
