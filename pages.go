@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"html"
 
@@ -15,7 +16,15 @@ var baseStylesheet string
 //go:embed frontend_assets/base.js
 var baseScript string
 
-func createPageHTML(requestId string, title string, bodyHTML string, script string, stylesheet string, dataJSON string) string {
+func createPageHTML(requestId string, title string, bodyHTML string, script string, stylesheet string, dataJSON string) (string, [][]byte, [][]byte) {
+	baseScriptHash := sha256.Sum256([]byte(baseScript))
+	scriptHash := sha256.Sum256([]byte(script))
+	scriptHashes := [][]byte{baseScriptHash[:], scriptHash[:]}
+
+	baseStylesheetHash := sha256.Sum256([]byte(baseStylesheet))
+	stylesheetHash := sha256.Sum256([]byte(stylesheet))
+	stylesheetHashes := [][]byte{baseStylesheetHash[:], stylesheetHash[:]}
+
 	htmlTemplate := `<html lang="en">
 <head>
 	<title>%s</title>
@@ -71,7 +80,7 @@ func createPageHTML(requestId string, title string, bodyHTML string, script stri
 		script,
 	)
 
-	return pageHTML
+	return pageHTML, scriptHashes, stylesheetHashes
 }
 
 var htmlSafeJSONStringCharacterEscapingBehavior json.StringCharacterEscapingBehaviorInterface = htmlSafeJSONStringCharacterEscapingBehaviorStruct{}
@@ -86,13 +95,13 @@ func (htmlSafeJSONStringCharacterEscapingBehaviorStruct) UseShorthandEscapeSeque
 	return true
 }
 
-func createUnexpectedErrorErrorPageHTML(requestId string) string {
+func createUnexpectedErrorErrorPageHTML(requestId string) (string, [][]byte, [][]byte) {
 	pageTitle := "An unexpected error occurred | Passwordless auth example"
 
 	bodyHTML := `<h1>An unexpected error occurred</h1>
 <p>Something went wrong. Please refresh the page or try again later.</p>`
 
-	pageHTML := createPageHTML(requestId, pageTitle, bodyHTML, "", "", "")
+	pageHTML, scriptHashes, stylesheetHashes := createPageHTML(requestId, pageTitle, bodyHTML, "", "", "")
 
-	return pageHTML
+	return pageHTML, scriptHashes, stylesheetHashes
 }
